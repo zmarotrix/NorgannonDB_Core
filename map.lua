@@ -388,6 +388,11 @@ function Map:RefreshWorld()
   worldDirty = false
   local n, a = 0, 0
   local uiMap = WorldMapFrame:IsShown() and WorldMapFrame:GetMapID()
+  if uiMap ~= shownMap then
+    -- one announcement per change, so add-ons needn't poll the map
+    local mapArea = uiMap and Map.UiMapToArea(uiMap)
+    C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_CHANGED", uiMap or nil, mapArea) end)
+  end
   shownMap = uiMap
   local area = uiMap and Map.UiMapToArea(uiMap)
   local pins = area and Map:PinsIn(area) or {}
