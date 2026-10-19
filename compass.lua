@@ -157,16 +157,32 @@ end
 -------------------------------------------------------------------------------------------
 
 local sinceNearest = NEAREST_EVERY
+local FADE_OUT, FADE_IN = .6, .25   -- seconds
+local fade = 0                      -- the strip's opacity while fading in and out
 
+-- When the game stops giving addons your position or facing (secret values in combat on this
+-- client, or none at all in some places), the compass can't follow you: it holds its last
+-- picture and fades out instead of jumping or vanishing, and fades back in when it can update.
 function Compass:Update(dt)
   local db = Core.db
   local enabled = not (db and db.compass and db.compass.hidden)
-  local px, py, instance = HBD:GetPlayerWorldPosition()
-  local facing = GetPlayerFacing()
-  if not enabled or not px or not facing or Core.IsSecret(px) or Core.IsSecret(facing) then
+  if not enabled then
     f:Hide()
+    fade = 0
     return
   end
+  local px, py, instance = HBD:GetPlayerWorldPosition()
+  local facing = GetPlayerFacing()
+  if not px or not facing or Core.IsSecret(px) or Core.IsSecret(facing) then
+    Compass.unavailable = true
+    if f:IsShown() then
+      fade = math.max(0, fade - (dt or 0) / FADE_OUT)
+      f:SetAlpha(fade)
+      if fade <= 0 then f:Hide() end
+    end
+    return
+  end
+  Compass.unavailable = false
   sinceNearest = sinceNearest + (dt or NEAREST_EVERY)
   if sinceNearest >= NEAREST_EVERY then
     sinceNearest = 0
@@ -174,9 +190,13 @@ function Compass:Update(dt)
   end
   if #targets == 0 and not (db and db.compass and db.compass.alwaysShow) then
     f:Hide()
+    fade = 0
     return
   end
+  if not f:IsShown() then fade = 0 end
   f:Show()
+  fade = Compass.moving and 1 or math.min(1, fade + (dt or 0) / FADE_IN)
+  f:SetAlpha(fade)
 
   for _, m in ipairs(marks) do
     local x, delta = offset(m.angle, facing)
