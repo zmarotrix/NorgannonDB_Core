@@ -268,9 +268,11 @@ local function settings()
 end
 
 function Compass:SetMovable(on)
+  -- the client rejects RegisterForDrag(nil): register once, and lock by clearing the handlers
+  -- and the mouse instead
   f:EnableMouse(on)
-  f:RegisterForDrag(on and "LeftButton" or nil)
   if on then
+    f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", function(self)
       self:StopMovingOrSizing()
@@ -279,6 +281,8 @@ function Compass:SetMovable(on)
     end)
     f:SetScript("OnMouseUp", function(_, button) if button == "RightButton" then Compass:SetMovable(false) end end)
   else
+    f:SetScript("OnDragStart", nil)
+    f:SetScript("OnDragStop", nil)
     f:SetScript("OnMouseUp", nil)
   end
   moveHint:SetShown(on)
