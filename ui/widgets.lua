@@ -500,28 +500,74 @@ end
 -- Progress bar and card
 -------------------------------------------------------------------------------------------
 
----A 4px progress bar: UI.Bar(parent[, "party"]). :SetProgress(current, total).
+---A rounded progress bar: UI.Bar(parent[, "party"][, height]). :SetProgress(current, total).
+---Track and fill have rounded ends. Steps show as ticks (2 to 20 steps; more would be noise).
+---:SetMarker(ratio or nil[, colour]) adds a round dot, e.g. a party member's progress.
 ---The party variant is a dimmer accent, for other players' progress next to yours.
-function UI.Bar(parent, kind)
+local MAX_TICKS = 20
+
+function UI.Bar(parent, kind, height)
+  local h = height or 5
   local f = CreateFrame("Frame", nil, parent)
-  f:SetHeight(4)
-  f.track = pill(f, 4, "BACKGROUND", 0)
+  f:SetHeight(h)
+  f.track = pill(f, h, "BACKGROUND", 0)
   f.track:SetColor({ .165, .137, .102 })
-  f.fill = tex(f, "ARTWORK", 0)
-  f.fill:SetPoint("TOPLEFT")
-  f.fill:SetPoint("BOTTOMLEFT")
+  -- the fill: its own frame with a pill, so both ends are round at any width
+  f.fillFrame = CreateFrame("Frame", nil, f)
+  f.fillFrame:SetPoint("TOPLEFT")
+  f.fillFrame:SetHeight(h)
+  f.fill = pill(f.fillFrame, h, "ARTWORK", 0)
+  f.ticks = {}
+  f.marker = f:CreateTexture(nil, "OVERLAY", nil, 2)
+  f.marker:SetTexture(TEX.circle)
+  f.marker:SetSize(h + 3, h + 3)
+  f.marker:Hide()
   f.kind = kind
-  f.ratio = 0
+  f.ratio, f.steps = 0, 0
   function f:Paint()
     local c = self.kind == "party" and UI.Mix(self.accent, { .53, .53, .53 }, .55) or self.accent
-    self.fill:SetColorTexture(c[1], c[2], c[3], 1)
-    local w = (self:GetWidth() or 0) * self.ratio
-    self.fill:SetWidth(math.max(w, .01))
-    self.fill:SetShown(self.ratio > 0)
+    self.fill:SetColor(c)
+    local width = self:GetWidth() or 0
+    local w = width * self.ratio
+    -- never narrower than its round ends
+    self.fillFrame:SetWidth(math.max(w, h))
+    self.fillFrame:SetShown(self.ratio > 0)
+    local n = (self.steps >= 2 and self.steps <= MAX_TICKS) and self.steps or 0
+    for i = 1, math.max(n - 1, #self.ticks) do
+      local t = self.ticks[i]
+      if i < n then
+        if not t then
+          t = self:CreateTexture(nil, "OVERLAY", nil, 1)
+          t:SetColorTexture(0, 0, 0, .55)
+          t:SetSize(1, h)
+          self.ticks[i] = t
+        end
+        t:ClearAllPoints()
+        t:SetPoint("CENTER", self, "LEFT", width * i / n, 0)
+        t:Show()
+      elseif t then
+        t:Hide()
+      end
+    end
+    if self.markerRatio then
+      self.marker:ClearAllPoints()
+      self.marker:SetPoint("CENTER", self, "LEFT", width * self.markerRatio, 0)
+      local mc = self.markerColor or { .78, .78, .78 }
+      self.marker:SetVertexColor(mc[1], mc[2], mc[3], 1)
+      self.marker:Show()
+    else
+      self.marker:Hide()
+    end
   end
   function f:ApplyAccent(c) self.accent = c self:Paint() end
   function f:SetProgress(current, total)
     self.ratio = (total and total > 0) and math.max(0, math.min(1, (current or 0) / total)) or 0
+    self.steps = total or 0
+    self:Paint()
+  end
+  function f:SetMarker(ratio, color)
+    self.markerRatio = ratio and math.max(0, math.min(1, ratio)) or nil
+    self.markerColor = color
     self:Paint()
   end
   f:SetScript("OnSizeChanged", f.Paint)
