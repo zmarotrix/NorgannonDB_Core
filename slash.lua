@@ -10,6 +10,7 @@ local HELP = {
   "/norg compass [on | off | move | lock] - the objective compass",
   "/norg arrow off - dismiss the waypoint arrow",
   "/norg icons - the town service and gathering icons, and which source the client has",
+  "/norg perf [seconds | stop | report] - measure the suite against its performance budgets (default 60 s)",
   "/norg mappins - list what is drawn on the open world map (who draws which markers)",
   "/norg version",
 }
@@ -55,6 +56,14 @@ SlashCmdList["NORGANNONCORE"] = function(msg)
     Core:Print(string.format("world map %s: %d pin types", tostring(WorldMapFrame:GetMapID()), #lines))
     for _, line in ipairs(lines) do Core:Print("  " .. line) end
     Core:Print(string.format("  NorgannonDB layer: %d pins, %d glows", Core.Map.stats.world or 0, Core.Map.stats.clusters or 0))
+  elseif cmd == "perf" then
+    if rest == "stop" then
+      if not Core.Perf:Stop() then Core:Print("not measuring") end
+    elseif rest == "report" then
+      Core.Perf:Print()
+    else
+      Core.Perf:Start(tonumber(rest))
+    end
   elseif cmd == "icons" then
     local keys = {}
     for key in pairs(Core.Map.SERVICE_ICONS) do keys[#keys + 1] = key end
