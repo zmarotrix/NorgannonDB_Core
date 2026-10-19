@@ -9,6 +9,7 @@ local HELP = {
   "/norg demo [off] - preview pins, compass and arrow with your quest log",
   "/norg compass [on | off | move | lock] - the objective compass",
   "/norg arrow off - dismiss the waypoint arrow",
+  "/norg mappins - list what is drawn on the open world map (who draws which markers)",
   "/norg version",
 }
 
@@ -41,6 +42,18 @@ SlashCmdList["NORGANNONCORE"] = function(msg)
     end
   elseif cmd == "arrow" then
     Core.Arrow:Clear("dismissed")
+  elseif cmd == "mappins" then
+    -- read-only: the world map's pin pools (Blizzard's and add-ons') and how many are shown
+    if not WorldMapFrame:IsShown() then Core:Print("open the world map first") return end
+    local lines = {}
+    for template, pool in pairs(WorldMapFrame.pinPools or {}) do
+      local ok, n = pcall(pool.GetNumActive, pool)
+      if ok and n and n > 0 then lines[#lines + 1] = string.format("%s: %d", tostring(template), n) end
+    end
+    table.sort(lines)
+    Core:Print(string.format("world map %s: %d pin types", tostring(WorldMapFrame:GetMapID()), #lines))
+    for _, line in ipairs(lines) do Core:Print("  " .. line) end
+    Core:Print(string.format("  NorgannonDB layer: %d pins, %d glows", Core.Map.stats.world or 0, Core.Map.stats.clusters or 0))
   elseif cmd == "version" then
     local info = NorgannonDB and NorgannonDB.info
     Core:Print(string.format("Core %s, data %s (%s)", Core:Version(), info and info.generated or "?", info and info.build or "?"))
