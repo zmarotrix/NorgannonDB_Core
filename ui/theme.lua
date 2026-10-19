@@ -101,6 +101,40 @@ function UI.Text(parent, role, size, color, layer)
   return fs
 end
 
+---A soft outer glow behind a FontString (default black): faint copies of the text in two rings,
+---1 px out and 2 px out, drawn under it. They follow the text, font and visibility of the
+---original. Turns the FontString's own drop shadow off. Returns the copies.
+local GLOW_RINGS = { { 1, .42 }, { 2, .14 } }   -- radius, opacity of each copy
+local GLOW_DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { .71, .71 }, { -.71, .71 }, { .71, -.71 }, { -.71, -.71 } }
+function UI.Glow(fs, color, strength)
+  if fs.glow then return fs.glow end
+  local c = color or UI.C.black
+  local parent = fs:GetParent()
+  local copies = {}
+  for _, ring in ipairs(GLOW_RINGS) do
+    for _, d in ipairs(GLOW_DIRS) do
+      local g = parent:CreateFontString(nil, "ARTWORK")
+      g:SetFontObject(fs:GetFontObject())
+      g:SetJustifyH(fs:GetJustifyH())
+      g:SetWordWrap(false)
+      g:SetShadowOffset(0, 0)
+      g:SetTextColor(c[1], c[2], c[3], ring[2] * (strength or 1))
+      g:SetPoint("CENTER", fs, "CENTER", d[1] * ring[1], d[2] * ring[1])
+      copies[#copies + 1] = g
+    end
+  end
+  fs:SetShadowOffset(0, 0)
+  fs.glow = copies
+  hooksecurefunc(fs, "SetText", function(_, text) for _, g in ipairs(copies) do g:SetText(text) end end)
+  hooksecurefunc(fs, "SetFontObject", function(_, font) for _, g in ipairs(copies) do g:SetFontObject(font) end end)
+  hooksecurefunc(fs, "Show", function() for _, g in ipairs(copies) do g:Show() end end)
+  hooksecurefunc(fs, "Hide", function() for _, g in ipairs(copies) do g:Hide() end end)
+  hooksecurefunc(fs, "SetShown", function(_, on) for _, g in ipairs(copies) do g:SetShown(on) end end)
+  local text = fs:GetText()
+  if text then for _, g in ipairs(copies) do g:SetText(text) end end
+  return copies
+end
+
 -------------------------------------------------------------------------------------------
 -- Quest difficulty colour, the game's rules
 -------------------------------------------------------------------------------------------
