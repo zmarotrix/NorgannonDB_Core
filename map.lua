@@ -553,6 +553,7 @@ Core:Listen("NORGANNON_QUEST_COLOR_CHANGED", "map", function() worldDirty = true
 local driver = CreateFrame("Frame")
 local elapsed = 0
 driver:SetScript("OnUpdate", function(_, dt)
+  if Map.pulse then Map.ApplyPulse() end   -- defined below the driver
   elapsed = elapsed + dt
   if elapsed < THROTTLE then return end
   elapsed = 0
@@ -567,6 +568,39 @@ driver:SetScript("OnUpdate", function(_, dt)
   end
   Map:RefreshMinimap()
 end)
+
+-------------------------------------------------------------------------------------------
+-- Pulse: "show me" - a group's pins grow and shrink for a moment so the eye finds them
+-------------------------------------------------------------------------------------------
+
+local PULSE_PERIOD, PULSE_GROW = .55, .9
+
+---Pulses every pin of a highlight group (e.g. "q788") for duration seconds (default 1.6); the
+---other groups dim meanwhile, as when hovering. Works on pins drawn later too (map just opened).
+function Map:Pulse(key, duration)
+  self.pulse = { key = key, start = GetTime(), duration = duration or 1.6 }
+  self:SetHighlight(key)
+end
+
+local function applyPulse()
+  local p = Map.pulse
+  if not p then return end
+  local t = GetTime() - p.start
+  local ended = t >= p.duration
+  local scale = ended and 1 or 1 + PULSE_GROW * (1 - math.cos(2 * math.pi * t / PULSE_PERIOD)) / 2
+  for _, pool in ipairs({ worldPins, miniPins }) do
+    for _, f in ipairs(pool) do
+      if f:IsShown() and f.pin and highlightKey(f.pin) == p.key and f.size then
+        f.icon:SetSize(f.size * scale, f.size * scale)
+      end
+    end
+  end
+  if ended then
+    Map.pulse = nil
+    if Map.highlight == p.key then Map:SetHighlight(nil) end
+  end
+end
+Map.ApplyPulse = applyPulse
 
 ---Draws everything now (normally the driver does it within THROTTLE seconds).
 function Map:Refresh()

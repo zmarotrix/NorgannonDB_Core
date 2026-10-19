@@ -590,6 +590,105 @@ function UI.Card(parent, title)
 end
 
 -------------------------------------------------------------------------------------------
+-- Segmented control: a pill of options, one selected. The selection fills the pill's rounded
+-- ends exactly (end segments get rounded highlight caps).
+-------------------------------------------------------------------------------------------
+
+---UI.Segmented(parent, items, onSelect[, height]). items = { {key = "near", label = "Nearest"} |
+---{key = "compact", icon = "viewCompact", tip = "Compact view"} }. :Select(key, silent),
+---:GetSelected(), .buttons. Follows the window accent (or opts via :ApplyAccent).
+function UI.Segmented(parent, items, onSelect, height)
+  local h = height or 18
+  local inner = h - 2
+  local seg = CreateFrame("Frame", nil, parent)
+  seg:SetHeight(h)
+  seg.border = pill(seg, h, "BACKGROUND", 0)
+  seg.border:SetColor(C.lineStrong)
+  seg.fill = pill(seg, h, "BACKGROUND", 1, 1)
+  seg.fill:SetColor({ 0, 0, 0, .55 })
+  seg.buttons = {}
+  local x = 1
+  for i, item in ipairs(items) do
+    local b = CreateFrame("Button", nil, seg)
+    b.key, b.tip = item.key, item.tip
+    if item.icon then
+      b.icon = UI.Icon(b, item.icon, inner - 5, C.muted, "OVERLAY")
+      b.icon:SetPoint("CENTER")
+      b:SetSize(inner + 6, inner)
+    else
+      b.text = UI.Text(b, "body", 12, C.muted, "OVERLAY")
+      b.text:SetPoint("CENTER")
+      b.text:SetJustifyH("CENTER")
+      b.text:SetText(item.label)
+      b:SetSize(math.floor(b.text:GetStringWidth() + 16), inner)
+    end
+    b:SetPoint("LEFT", seg, "LEFT", x, 0)
+    x = x + b:GetWidth()
+    -- the highlight: rounded on the pill's outer ends, square between segments
+    local first, last = i == 1, i == #items
+    b.hl = {}
+    local function part(l, r)
+      local t = b:CreateTexture(nil, "ARTWORK")
+      t:SetTexture(TEX.circle)
+      t:SetTexCoord(l, r, 0, 1)
+      t:SetSize(inner / 2, inner)
+      b.hl[#b.hl + 1] = t
+      return t
+    end
+    local leftCap = first and part(0, .5)
+    local rightCap = last and part(.5, 1)
+    if leftCap then leftCap:SetPoint("LEFT") end
+    if rightCap then rightCap:SetPoint("RIGHT") end
+    local mid = b:CreateTexture(nil, "ARTWORK")
+    mid:SetColorTexture(1, 1, 1, 1)
+    mid:SetPoint("TOPLEFT", leftCap or b, leftCap and "TOPRIGHT" or "TOPLEFT")
+    mid:SetPoint("BOTTOMRIGHT", rightCap or b, rightCap and "BOTTOMLEFT" or "BOTTOMRIGHT")
+    b.mid = mid
+    b.hl[#b.hl + 1] = mid
+    b:SetScript("OnClick", function(self) seg:Select(self.key) end)
+    b:SetScript("OnEnter", function(self)
+      self.hover = true
+      seg:Paint()
+      if self.tip then
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine(self.tip, 1, 1, 1)
+        GameTooltip:Show()
+      end
+    end)
+    b:SetScript("OnLeave", function(self)
+      self.hover = false
+      seg:Paint()
+      GameTooltip:Hide()
+    end)
+    seg.buttons[i] = b
+  end
+  seg:SetWidth(x + 1)
+  seg.accent = C.goldSoft
+
+  function seg:Paint()
+    local a = self.accent
+    for _, b in ipairs(self.buttons) do
+      local on = b.key == self.selected
+      for _, t in ipairs(b.hl) do
+        if t == b.mid then t:SetColorTexture(a[1], a[2], a[3], on and .3 or 0) else t:SetVertexColor(a[1], a[2], a[3], on and .3 or 0) end
+      end
+      local tc = on and { 1, 1, 1 } or (b.hover and C.text or C.muted)
+      if b.text then b.text:SetTextColor(tc[1], tc[2], tc[3]) end
+      if b.icon then b.icon:SetVertexColor(tc[1], tc[2], tc[3]) end
+    end
+  end
+  function seg:ApplyAccent(c) self.accent = c self:Paint() end
+  function seg:Select(key, silent)
+    self.selected = key
+    self:Paint()
+    if not silent and onSelect then onSelect(key) end
+  end
+  function seg:GetSelected() return self.selected end
+  attachAccent(seg)
+  return seg
+end
+
+-------------------------------------------------------------------------------------------
 -- "Powered by NorgannonDB"
 -------------------------------------------------------------------------------------------
 
