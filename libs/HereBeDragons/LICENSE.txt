@@ -1,0 +1,5 @@
+HereBeDragons-2.0 by Nevcairiel (h.leppkes@gmail.com), BSD license.
+https://www.wowace.com/projects/herebedragons
+This copy carries the WoW Forever map-data adjustments made by the Questie project and is
+registered under the private LibStub name "HereBeDragons-NorgannonCore-2.0" so it never shadows
+or is shadowed by other addons' copies.

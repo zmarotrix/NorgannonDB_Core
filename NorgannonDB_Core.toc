@@ -1,0 +1,32 @@
+## Interface: 16001
+## Title: |cffe7c66cNorgannonDB|r Core
+## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Foresight, Archivum): UI kit, events, settings. /norg
+## Author: Maro
+## Version: 1.0.0
+## X-Core-API: 1.0
+## X-License: All Rights Reserved
+## Dependencies: NorgannonDB
+## SavedVariables: NorgannonCoreDB
+## Category: Libraries
+## IconTexture: Interface\AddOns\NorgannonDB_Core\media\marks\norgannondb
+
+libs\LibStub\LibStub.lua
+libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+libs\HereBeDragons\HereBeDragons-2.0.lua
+core.lua
+client.lua
+registry.lua
+db.lua
+player.lua
+ui\theme.lua
+ui\widgets.lua
+ui\list.lua
+ui\about.lua
+colors.lua
+map.lua
+arrow.lua
+compass.lua
+demo.lua
+settings.lua
+gallery.lua
+slash.lua
