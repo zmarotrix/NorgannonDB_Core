@@ -106,6 +106,32 @@ Core:OnReady(function()
   Core.settingsPage, Core.settingsCategory = page, category
 end)
 
+-- the compass and the arrow belong to the Core: their page sits under NorgannonDB
+Core:OnReady(function()
+  if not (Settings and Settings.RegisterCanvasLayoutSubcategory) then return end
+  local page = CreateFrame("Frame")
+  page:Hide()
+  local list = UI.SettingsList(page)
+  list:Header("Compass")
+  list:Toggle("Show the compass", "One marker per tracked objective, across the top of the screen.",
+    function() return Core.Compass:IsEnabled() end, function(on) Core.Compass:SetShown(on) end)
+  list:Slider("Compass size", nil, .6, 1.6, .05,
+    function() return Core.Compass:GetSize() end, function(v) Core.Compass:SetSize(v) end, "%.0f%%", 100)
+  list:Buttons("Position", "Drag it anywhere; right-click it (or Lock) when done.", {
+    { "Move", function() Core.Compass:SetMovable(true) end },
+    { "Lock", function() Core.Compass:SetMovable(false) end },
+    { "Reset", function() Core.Compass:ResetPosition() end },
+  })
+  list:Header("Waypoint arrow")
+  list:Slider("Arrow size", "The arrow appears only when you point it somewhere.", .6, 1.6, .05,
+    function() return Core.Arrow:GetSize() end, function(v) Core.Arrow:SetSize(v) end, "%.0f%%", 100)
+  page:SetScript("OnShow", function() list:Refresh() end)
+  Core.compassPage, Core.compassList = page, list
+  Core:OnLogin(function()
+    if Core.settingsCategory then Core.compassCategory = Core:AddSettingsPage(page, "Compass & arrow") end
+  end)
+end)
+
 ---Opens the suite's Settings page.
 function Core:OpenSettings()
   if self.settingsCategory and Settings and Settings.OpenToCategory then

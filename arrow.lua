@@ -179,8 +179,16 @@ f:SetScript("OnUpdate", function(_, dt)
   Arrow:Update()
 end)
 
--- restore the position and the target after /reload or login
+---Arrow size (scale), saved.
+function Arrow:SetSize(scale)
+  if db() then db().arrowScale = scale end
+  f:SetScale(scale)
+end
+function Arrow:GetSize() return db() and db().arrowScale or 1 end
+
+-- restore the position, size and target after /reload or login
 Core:OnLogin(function()
+  f:SetScale(Arrow:GetSize())
   local saved = db() and db().windows.NorgannonCoreArrow
   if saved and saved.point then
     f:ClearAllPoints()

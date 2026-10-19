@@ -250,6 +250,10 @@ local function pinEnter(self)
     local f = UI.C.faint
     GameTooltip:AddLine("Click: new colour  ·  Right-click: choose colour", f[1], f[2], f[3])
   end
+  if pin.shiftHint then
+    local f = UI.C.faint
+    GameTooltip:AddLine(pin.shiftHint, f[1], f[2], f[3])
+  end
   GameTooltip:Show()
 end
 
@@ -262,7 +266,9 @@ end
 local function pinClick(self, button)
   local pin = self.pin
   if not pin then return end
-  if pin.onClick then
+  if pin.onShiftClick and IsShiftKeyDown() then
+    Core.SafeCall(pin.onShiftClick, pin, button)
+  elseif pin.onClick then
     Core.SafeCall(pin.onClick, pin, button)
   elseif pin.quest and Core.Colors then
     if button == "RightButton" then Core.Colors:Pick(pin.quest) else Core.Colors:Randomize(pin.quest) end
@@ -292,7 +298,7 @@ local function dress(f, pin, size, alpha)
   local key = Map.highlight
   f:SetAlpha(f.baseAlpha * ((key and highlightKey(pin) ~= key) and DIM or 1))
   f.pin = pin
-  f:EnableMouse(pin.title ~= nil or pin.tooltip ~= nil or pin.onClick ~= nil or pin.quest ~= nil)
+  f:EnableMouse(pin.title ~= nil or pin.tooltip ~= nil or pin.onClick ~= nil or pin.quest ~= nil or pin.onShiftClick ~= nil)
 end
 
 -------------------------------------------------------------------------------------------

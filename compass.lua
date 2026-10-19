@@ -251,6 +251,22 @@ function Compass:IsEnabled()
 end
 
 -- unlock to move: /norg compass move
+-- moving: the strip lights up with a hint; drag it, then Lock (or right-click it)
+local moveHint = f:CreateFontString(nil, "OVERLAY")
+moveHint:SetFontObject(UI.Font("body", 12))
+moveHint:SetPoint("TOP", f, "BOTTOM", 0, -8)
+moveHint:SetText("Drag the compass  ·  right-click to lock")
+moveHint:Hide()
+local moveGlow = f:CreateTexture(nil, "BACKGROUND", nil, 1)
+moveGlow:SetAllPoints()
+moveGlow:SetColorTexture(1, .82, .3, .18)
+moveGlow:Hide()
+
+local function settings()
+  Core.db.compass = Core.db.compass or {}
+  return Core.db.compass
+end
+
 function Compass:SetMovable(on)
   f:EnableMouse(on)
   f:RegisterForDrag(on and "LeftButton" or nil)
@@ -261,13 +277,35 @@ function Compass:SetMovable(on)
       local point, _, relativePoint, x, y = self:GetPoint()
       if Core.db then Core.db.windows.NorgannonCoreCompass = { point = point, relativePoint = relativePoint, x = x, y = y } end
     end)
+    f:SetScript("OnMouseUp", function(_, button) if button == "RightButton" then Compass:SetMovable(false) end end)
+  else
+    f:SetScript("OnMouseUp", nil)
   end
-  Core.db.compass = Core.db.compass or {}
-  Core.db.compass.alwaysShow = on or nil   -- visible while placing it
+  moveHint:SetShown(on)
+  moveGlow:SetShown(on)
+  settings().alwaysShow = on or nil   -- visible while placing it
   self.moving = on
+  sinceNearest = NEAREST_EVERY
+  self:Update(0)
+  Core:Send("NORGANNON_COMPASS_MOVING", on)
+end
+
+---Compass size (scale, .6 to 1.6), saved.
+function Compass:SetSize(scale)
+  settings().scale = scale
+  f:SetScale(scale)
+end
+function Compass:GetSize() return settings().scale or 1 end
+
+---Back to the default place under the top of the screen.
+function Compass:ResetPosition()
+  if Core.db then Core.db.windows.NorgannonCoreCompass = nil end
+  f:ClearAllPoints()
+  f:SetPoint("TOP", UIParent, "TOP", 0, -62)
 end
 
 Core:OnLogin(function()
+  f:SetScale(Compass:GetSize())
   local saved = Core.db and Core.db.windows.NorgannonCoreCompass
   if saved and saved.point then
     f:ClearAllPoints()

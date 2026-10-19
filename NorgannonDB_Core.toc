@@ -2,8 +2,8 @@
 ## Title: |cffe7c66cNorgannonDB|r Core
 ## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Foresight, Archivum): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.5.0
-## X-Core-API: 1.5
+## Version: 1.6.0
+## X-Core-API: 1.6
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB
 ## SavedVariables: NorgannonCoreDB

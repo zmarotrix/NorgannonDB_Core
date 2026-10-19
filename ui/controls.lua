@@ -217,6 +217,21 @@ function UI.SettingsList(parent)
     return row(label, desc, d, function() d:SetValue(get(), true) end)
   end
 
+  ---A row with one or more buttons: list:Buttons(label, desc, { {text, func[, style]}, ... }).
+  function list:Buttons(label, desc, buttons)
+    local holder = CreateFrame("Frame", nil, self.content)
+    holder:SetSize(CONTROL_W, 24)
+    local previous
+    for i = #buttons, 1, -1 do
+      local def = buttons[i]
+      local b = UI.Button(holder, def[1], def[3] or "quiet", function() def[2]() end)
+      b:SetPoint("RIGHT", previous or holder, previous and "LEFT" or "RIGHT", previous and -6 or 0, 0)
+      previous = b
+      holder["button" .. i] = b
+    end
+    return row(label, desc, holder)
+  end
+
   function list:Refresh()
     for _, r in ipairs(self.rows) do if r.refresh then r.refresh() end end
   end
