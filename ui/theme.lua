@@ -15,6 +15,8 @@ UI.TEX = {
   chevron = MEDIA .. "ui\\chevron", db = MEDIA .. "ui\\db", white = "Interface\\Buttons\\WHITE8X8",
   pin = MEDIA .. "ui\\pin", pinDiamond = MEDIA .. "ui\\pin-diamond", ring = MEDIA .. "ui\\ring",
   arrow = MEDIA .. "ui\\arrow", exclaim = MEDIA .. "ui\\exclaim", question = MEDIA .. "ui\\question",
+  round = MEDIA .. "ui\\round", roundLine = MEDIA .. "ui\\round-line",
+  viewDetailed = MEDIA .. "ui\\view-detailed", viewCompact = MEDIA .. "ui\\view-compact",
 }
 
 ---{r, g, b, a} from "rrggbb".

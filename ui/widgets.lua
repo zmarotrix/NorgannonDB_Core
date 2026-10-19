@@ -79,6 +79,80 @@ local function pill(frame, height, layer, sub, inset)
 end
 UI.Pill = pill
 
+-------------------------------------------------------------------------------------------
+-- Rounded boxes: a 9-slice of one rounded-rectangle texture (corner = a quarter of it), so
+-- corners stay round at any size. The game has no rounded borders of its own.
+-------------------------------------------------------------------------------------------
+
+local CORNER = .25   -- the texture's corner slice, as a share of its size
+
+---A rounded rectangle filling frame: UI.Round(frame, layer, sub, radius[, "line"]).
+---:SetColor(c, alpha). "line" draws the outline texture instead of the fill.
+function UI.Round(frame, layer, sub, radius, style)
+  local file = style == "line" and TEX.roundLine or TEX.round
+  local r = radius or 6
+  local p = {}
+  local function piece(l, rgt, t, b)
+    local tx = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
+    tx:SetTexture(file)
+    tx:SetTexCoord(l, rgt, t, b)
+    p[#p + 1] = tx
+    return tx
+  end
+  local m = CORNER
+  local tl, tr = piece(0, m, 0, m), piece(1 - m, 1, 0, m)
+  local bl, br = piece(0, m, 1 - m, 1), piece(1 - m, 1, 1 - m, 1)
+  for _, corner in ipairs({ tl, tr, bl, br }) do corner:SetSize(r, r) end
+  tl:SetPoint("TOPLEFT")
+  tr:SetPoint("TOPRIGHT")
+  bl:SetPoint("BOTTOMLEFT")
+  br:SetPoint("BOTTOMRIGHT")
+  local top, bottom = piece(m, 1 - m, 0, m), piece(m, 1 - m, 1 - m, 1)
+  top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
+  top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+  bottom:SetPoint("TOPLEFT", bl, "TOPRIGHT")
+  bottom:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT")
+  local left, right = piece(0, m, m, 1 - m), piece(1 - m, 1, m, 1 - m)
+  left:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
+  left:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT")
+  right:SetPoint("TOPLEFT", tr, "BOTTOMLEFT")
+  right:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT")
+  local center = piece(m, 1 - m, m, 1 - m)
+  center:SetPoint("TOPLEFT", tl, "BOTTOMRIGHT")
+  center:SetPoint("BOTTOMRIGHT", br, "TOPLEFT")
+  local box = { pieces = p }
+  function box:SetColor(c, alpha)
+    for _, tx in ipairs(self.pieces) do tx:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
+  end
+  function box:SetShown(on) for _, tx in ipairs(self.pieces) do tx:SetShown(on) end end
+  return box
+end
+
+---The left edge of a rounded box, `width` wide, following its curve (a colour stripe on a card).
+function UI.RoundEdge(frame, layer, sub, radius, width)
+  local r, w = radius or 6, width or 3
+  local u = CORNER * w / r   -- texture width of the stripe
+  local function piece(t, b)
+    local tx = frame:CreateTexture(nil, layer or "BORDER", nil, sub or 0)
+    tx:SetTexture(TEX.round)
+    tx:SetTexCoord(0, u, t, b)
+    tx:SetWidth(w)
+    return tx
+  end
+  local top, mid, bottom = piece(0, CORNER), piece(CORNER, 1 - CORNER), piece(1 - CORNER, 1)
+  top:SetHeight(r)
+  bottom:SetHeight(r)
+  top:SetPoint("TOPLEFT")
+  bottom:SetPoint("BOTTOMLEFT")
+  mid:SetPoint("TOPLEFT", top, "BOTTOMLEFT")
+  mid:SetPoint("BOTTOMRIGHT", bottom, "TOPRIGHT")
+  local edge = { pieces = { top, mid, bottom } }
+  function edge:SetColor(c, alpha)
+    for _, tx in ipairs(self.pieces) do tx:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
+  end
+  return edge
+end
+
 ---An icon texture from the Core's media, tinted.
 function UI.Icon(parent, name, size, c, layer)
   local t = parent:CreateTexture(nil, layer or "ARTWORK")
