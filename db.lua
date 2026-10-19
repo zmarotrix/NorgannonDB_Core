@@ -77,6 +77,7 @@ local function buildIndex(yield)
       if yield and n % CHUNK == 0 then yield() end
     end
     for _, ids in ipairs(slots.ids) do table.sort(ids) end
+    slots.byLower = byLower
     result[kind] = slots
   end
   return result
@@ -209,6 +210,16 @@ function DBX:Search(text, opts)
     end
   end
   return results, total
+end
+
+---Every id of an exact (case-insensitive, localized) name: DB:IdsByName("objects", "Peacebloom").
+---For tooltips that only have a name. Returns an empty list when nothing matches.
+function DBX:IdsByName(kind, name)
+  if type(name) ~= "string" or Core.IsSecret(name) then return {} end
+  self:EnsureIndex()
+  local slots = index[kind]
+  local slot = slots and slots.byLower[string.lower(name)]
+  return slot and slots.ids[slot] or {}
 end
 
 -------------------------------------------------------------------------------------------
