@@ -143,20 +143,37 @@ local ROW_GAP, CONTROL_W = 14, 170
 function UI.SettingsList(parent)
   local area = UI.ScrollArea(parent)
   area:SetAllPoints()
-  local list = { area = area, content = area.content, rows = {}, y = -8 }
+  local list = { area = area, content = area.content, rows = {}, y = -8, items = {} }
 
-  local function place(region, height)
-    region:SetPoint("TOPLEFT", list.content, "TOPLEFT", 12, list.y)
-    region:SetPoint("TOPRIGHT", list.content, "TOPRIGHT", -12, list.y)
-    list.y = list.y - height - ROW_GAP
-    list.content:SetHeight(-list.y + 8)
+  -- each item: { region, height = number or function() (measured again on every layout), gap }
+  local function place(region, height, gap)
+    table.insert(list.items, { region = region, height = height, gap = gap or 0 })
+    list:Layout()
   end
+
+  ---Stacks the rows again. A description's wrapped height is only right once the page has its
+  ---real width, so this runs when the list is resized or shown (and after every row is added).
+  function list:Layout()
+    local y = -8
+    for _, item in ipairs(self.items) do
+      y = y - item.gap
+      local h = type(item.height) == "function" and item.height() or item.height
+      item.region:ClearAllPoints()
+      item.region:SetPoint("TOPLEFT", self.content, "TOPLEFT", 12, y)
+      item.region:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", -12, y)
+      if item.region.SetHeight and item.region.desc then item.region:SetHeight(h) end
+      y = y - h - ROW_GAP
+    end
+    self.y = y
+    self.content:SetHeight(-y + 8)
+  end
+  area:HookScript("OnSizeChanged", function() list:Layout() end)
+  area:HookScript("OnShow", function() list:Layout() C_Timer.After(0, function() list:Layout() end) end)
 
   function list:Header(text)
     local h = UI.Text(self.content, "title", 16, C.goldSoft)
     h:SetText(text)
-    self.y = self.y - 6
-    place(h, 18)
+    place(h, 18, 6)
     return h
   end
 
@@ -166,21 +183,24 @@ function UI.SettingsList(parent)
     r.label:SetPoint("TOPLEFT", 0, 0)
     r.label:SetPoint("TOPRIGHT", r, "TOPRIGHT", -(CONTROL_W + 16), 0)
     r.label:SetText(label)
-    local h = 18
     if desc then
       r.desc = UI.Text(r, "body", 12, C.muted)
       r.desc:SetPoint("TOPLEFT", r.label, "BOTTOMLEFT", 0, -3)
       r.desc:SetPoint("TOPRIGHT", r.label, "BOTTOMRIGHT", 0, -3)
       r.desc:SetWordWrap(true)
       r.desc:SetText(desc)
-      h = h + 3 + math.max(14, r.desc:GetStringHeight() or 14)
     end
+    local function height()
+      if not r.desc then return 18 end
+      return 18 + 3 + math.max(14, r.desc:GetStringHeight() or 14)
+    end
+    local h = height()
     control:SetParent(r)
     control:ClearAllPoints()
     control:SetPoint("TOPRIGHT", r, "TOPRIGHT", 0, 0)
     r.control, r.refresh = control, refresh
     r:SetHeight(h)
-    place(r, h)
+    place(r, height)
     table.insert(list.rows, r)
     return r
   end
@@ -234,6 +254,7 @@ function UI.SettingsList(parent)
 
   function list:Refresh()
     for _, r in ipairs(self.rows) do if r.refresh then r.refresh() end end
+    self:Layout()
   end
 
   return list
