@@ -10,7 +10,7 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 8,
+  VERSION_MINOR = 9,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
 }

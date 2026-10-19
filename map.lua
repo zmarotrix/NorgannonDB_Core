@@ -306,7 +306,8 @@ end
 
 local function pinColor(pin)
   if pin.color then return pin.color end
-  if pin.quest and Core.Colors then return Core.Colors:ForQuest(pin.quest) end
+  local key = pin.colorKey or pin.quest
+  if key and Core.Colors then return Core.Colors:ForQuest(key) end
 end
 Map.PinColor = pinColor
 
@@ -321,7 +322,7 @@ local function pinEnter(self)
   elseif pin.title then
     GameTooltip:AddLine(pin.title, 1, 1, 1)
   end
-  if pin.quest and not pin.onClick then
+  if (pin.quest or pin.colorKey) and not pin.onClick then
     local f = UI.C.faint
     GameTooltip:AddLine("Click: new colour  ·  Right-click: choose colour", f[1], f[2], f[3])
   end
@@ -345,8 +346,9 @@ local function pinClick(self, button)
     Core.SafeCall(pin.onShiftClick, pin, button)
   elseif pin.onClick then
     Core.SafeCall(pin.onClick, pin, button)
-  elseif pin.quest and Core.Colors then
-    if button == "RightButton" then Core.Colors:Pick(pin.quest) else Core.Colors:Randomize(pin.quest) end
+  elseif (pin.colorKey or pin.quest) and Core.Colors then
+    local key = pin.colorKey or pin.quest
+    if button == "RightButton" then Core.Colors:Pick(key) else Core.Colors:Randomize(key) end
   end
 end
 

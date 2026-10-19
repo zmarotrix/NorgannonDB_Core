@@ -49,13 +49,27 @@ local function saved()
   return db.questColors
 end
 
----The colour of a quest {r, g, b}: the player's choice, or a stable default.
+-- a stable number for any key: quest ids as they are, strings ("track:npcs:mottled boar") hashed
+local function number(key)
+  if type(key) == "number" then return key end
+  local h = 0
+  for i = 1, #tostring(key) do h = (h * 31 + string.byte(key, i)) % 1000003 end
+  return h
+end
+
+---The colour of a quest {r, g, b}: the player's choice, or a stable default. Any key works
+---(1.9): addons colour other things the same way, e.g. Clairvoyance's tracked entries.
 function Colors:ForQuest(questId)
   local s = saved()
   local c = s and s[questId]
   if c then return c end
-  return PALETTE[(questId * 37) % #PALETTE + 1]
+  return PALETTE[(number(questId) * 37) % #PALETTE + 1]
 end
+Colors.For = Colors.ForQuest
+
+-- other coloured things on screen, so a random colour avoids them too: fn() -> { key, ... }
+local inUseProviders = {}
+function Colors:RegisterInUse(owner, fn) inUseProviders[owner] = fn end
 
 function Colors:Set(questId, color)
   local s = saved()
@@ -76,6 +90,11 @@ function Colors:Randomize(questId)
   local inUse = { current }
   for _, id in ipairs(Core.Player and Core.Player:QuestIds() or {}) do
     if id ~= questId then inUse[#inUse + 1] = self:ForQuest(id) end
+  end
+  for _, fn in pairs(inUseProviders) do
+    for _, key in ipairs(fn() or {}) do
+      if key ~= questId then inUse[#inUse + 1] = self:ForQuest(key) end
+    end
   end
   local candidates = {}
   for _, c in ipairs(PALETTE) do
