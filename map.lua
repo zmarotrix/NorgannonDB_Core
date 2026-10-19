@@ -488,7 +488,7 @@ function Map:RefreshWorld()
     a = a + 1
     local f = areaFrame(a)
     local c = cluster.color or pinColor(cluster.members[1]) or UI.C.goldSoft
-    f.glow:SetVertexColor(c[1], c[2], c[3], .3)   -- shown only on hover, so it can be fairly strong
+    f.glow:SetVertexColor(c[1], c[2], c[3], .4)   -- shown only on hover, so it can be fairly strong
     f.key = highlightKey(cluster.members[1])
     f.active = true
     f:SetFrameLevel(WORLD_LEVEL + 1)
