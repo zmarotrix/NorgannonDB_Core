@@ -500,8 +500,35 @@ function Map:RefreshWorld()
   end
   for i = a + 1, #areaFrames do areaFrames[i]:Hide() areaFrames[i].active = nil end
 
+  -- pins sharing an overlapKey (the same quest's "!" or "?") don't stack: one is skipped when
+  -- another of its key is already drawn within its own size on screen. Measured in screen
+  -- pixels, so zooming in separates spawns that are really apart.
+  local drawn = {}
+  local w, h = world:GetWidth(), world:GetHeight()
+  local function overlaps(pin)
+    local key = pin.overlapKey
+    if not key then return false end
+    local sx, sy = pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale
+    local reach = (pin.size or 7) * .9
+    local list = drawn[key]
+    if list then
+      for _, p in ipairs(list) do
+        local dx, dy = p[1] - sx, p[2] - sy
+        if dx * dx + dy * dy < reach * reach then return true end
+      end
+    else
+      list = {}
+      drawn[key] = list
+    end
+    list[#list + 1] = { sx, sy }
+    return false
+  end
+  Map.stats.overlapped = 0
+
   for _, pin in ipairs(pins) do
-    if pin.world ~= false then
+    if pin.world ~= false and overlaps(pin) then
+      Map.stats.overlapped = Map.stats.overlapped + 1
+    elseif pin.world ~= false then
       n = n + 1
       local f = worldPins[n] or newPin(world)
       worldPins[n] = f
@@ -519,6 +546,7 @@ local function rescaleWorld()
   local s = canvasScale()
   if s == pinScale then return end
   pinScale = s
+  worldDirty = true   -- zoom changes which overlapping pins are hidden: redraw on the next tick
   for _, f in ipairs(worldPins) do
     if f:IsShown() and f.pin then place(f, f.pin.x, f.pin.y) end
   end
@@ -596,7 +624,19 @@ function Map:RefreshMinimap()
       table.sort(visible, function(p, q) return p.d < q.d end)
       for i = MINIMAP_MAX + 1, #visible do visible[i] = nil end
     end
+    local drawn = {}   -- the same overlapKey rule as the world map, in minimap pixels
     for _, v in ipairs(visible) do
+      local key, skip = v.pin.overlapKey, false
+      if key then
+        local reach = (v.pin.minimapSize or 7) * .9
+        drawn[key] = drawn[key] or {}
+        for _, p in ipairs(drawn[key]) do
+          local dx, dy = p[1] - v.x, p[2] - v.y
+          if dx * dx + dy * dy < reach * reach then skip = true break end
+        end
+        if not skip then table.insert(drawn[key], { v.x, v.y }) end
+      end
+      if not skip then
       n = n + 1
       local f = miniPins[n] or newPin(Minimap)
       miniPins[n] = f
@@ -605,6 +645,7 @@ function Map:RefreshMinimap()
       f:ClearAllPoints()
       f:SetPoint("CENTER", Minimap, "CENTER", -v.x, v.y)
       f:Show()
+      end
     end
   end
   for i = n + 1, #miniPins do miniPins[i]:Hide() miniPins[i].pin = nil end
