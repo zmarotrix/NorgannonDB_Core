@@ -6,6 +6,7 @@ NorgannonDB Core includes the following components, each under its own license.
 |---|---|---|
 | HereBeDragons-2.0 by Nevcairiel, with the WoW Forever map-data adjustments made by the Questie project | `libs/HereBeDragons` | BSD (see `libs/HereBeDragons/LICENSE.txt`) |
 | LibStub | `libs/LibStub` | Public domain |
+| AceComm-3.0 and ChatThrottleLib by the Ace3 team and Mikk | `libs/AceComm-3.0` | BSD-style (Ace3) |
 | CallbackHandler-1.0 by Nevcairiel and the Ace3 team | `libs/CallbackHandler-1.0` | BSD-style (Ace3) |
 | Marcellus by Astigmatic | `media/fonts/Marcellus-Regular.ttf` | SIL Open Font License 1.1 (`media/fonts/OFL-Marcellus.txt`) |
 | Alegreya Sans by Huerta Tipográfica | `media/fonts/AlegreyaSans-*.ttf` | SIL Open Font License 1.1 (`media/fonts/OFL-AlegreyaSans.txt`) |

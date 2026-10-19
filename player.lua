@@ -217,6 +217,39 @@ end
 function Player:GetSkill(id) return self.skills[id] end
 
 -------------------------------------------------------------------------------------------
+-- Reputation: the absolute value the game keeps (-42000 hated .. 42999 exalted), which is what
+-- NorgannonDB's requiredMinRep / requiredMaxRep compare against
+-------------------------------------------------------------------------------------------
+
+local reputation = {}   -- factionId -> value, or false when the client doesn't know the faction
+
+---Reputation with a faction, or nil if the player hasn't met it (or the value is secret).
+function Player:GetReputation(factionId)
+  local cached = reputation[factionId]
+  if cached ~= nil then return cached or nil end
+  local value
+  if C_Reputation and C_Reputation.GetFactionDataByID then
+    local ok, data = pcall(C_Reputation.GetFactionDataByID, factionId)
+    if ok and public(data) and type(data.currentStanding) == "number" and not IsSecret(data.currentStanding) then
+      value = data.currentStanding
+    end
+  end
+  if value == nil and GetFactionInfoByID then
+    local ok, name, _, _, _, _, barValue = pcall(GetFactionInfoByID, factionId)
+    if ok and name and type(barValue) == "number" and not IsSecret(barValue) then value = barValue end
+  end
+  reputation[factionId] = value or false
+  return value
+end
+
+Core:On("UPDATE_FACTION", "player", function()
+  Core:NextFrame(function()
+    reputation = {}
+    Core:Send("NORGANNON_REPUTATION_CHANGED")
+  end, "reputation")
+end)
+
+-------------------------------------------------------------------------------------------
 -- Character and position
 -------------------------------------------------------------------------------------------
 
