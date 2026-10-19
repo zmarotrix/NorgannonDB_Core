@@ -274,3 +274,62 @@ function DBX:Unlocks(questId)
   local quest = DB and DB:Get("quests", questId)
   return (unlocks and unlocks[questId]) or {}, quest and quest.nextQuestInChain
 end
+
+-------------------------------------------------------------------------------------------
+-- Instances (NorgannonDB 1.3): dungeons and raids, one record per wing
+-------------------------------------------------------------------------------------------
+
+local function instances()
+  local DB = db()
+  return DB and DB.instances or {}
+end
+
+---One instance by key ("deadmines", "sm-cathedral"), or nil.
+function DBX:Instance(key) return instances()[key] end
+
+---The instance's name in the client's language: "The Deadmines", "Scarlet Monastery: Cathedral".
+function DBX:InstanceName(key)
+  local inst = instances()[key]
+  if not inst then return nil end
+  local base = inst.name
+  if inst.area then
+    local area = inst.area
+    if C_Map and C_Map.GetAreaInfo then
+      local ok, name = pcall(C_Map.GetAreaInfo, area)
+      if ok and type(name) == "string" and name ~= "" then base = name end
+    end
+    if not base then
+      local DB = db()
+      base = DB and DB.dungeons and DB.dungeons[area] and DB.dungeons[area].name
+    end
+  end
+  base = inst.groupName or base or key
+  if inst.wing then return base .. ": " .. inst.wing end
+  return base
+end
+
+---Every instance key, ordered by recommended level, then name. filter(key, inst) may skip some.
+function DBX:InstanceKeys(filter)
+  local keys = {}
+  for key, inst in pairs(instances()) do
+    if not filter or filter(key, inst) then keys[#keys + 1] = key end
+  end
+  local all = instances()
+  table.sort(keys, function(a, b)
+    local la = all[a].levels and all[a].levels.min or 99
+    local lb = all[b].levels and all[b].levels.min or 99
+    if la ~= lb then return la < lb end
+    return (self:InstanceName(a) or a) < (self:InstanceName(b) or b)
+  end)
+  return keys
+end
+
+---The instance keys for an area id (several for an instance with wings).
+function DBX:InstancesAt(area)
+  local out = {}
+  for key, inst in pairs(instances()) do
+    if inst.area == area then out[#out + 1] = key end
+  end
+  table.sort(out)
+  return out
+end

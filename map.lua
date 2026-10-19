@@ -585,18 +585,22 @@ local function prepareMinimap()
   return true
 end
 
----Pixel offset of a pin from the minimap centre, and whether it is inside the minimap.
+---Pixel offset of a pin from the minimap centre (x right, y up), and whether it is inside.
+---HereBeDragons' world coordinates fall going east (x) and rise going north (y), so east is
+---player x minus pin x and north is pin y minus player y. A rotating minimap turns the picture
+---so your facing points up (facing counts counter-clockwise from north).
 local function minimapOffset(pin, margin)
   local wx, wy, instance = worldOf(pin)
   if not wx or instance ~= mm.instance then return end
-  local dx, dy = mm.x - wx, mm.y - wy
-  if mm.rotate then dx, dy = dx * mm.cos - dy * mm.sin, dx * mm.sin + dy * mm.cos end
-  local x, y = dx / mm.radius * mm.halfw, dy / mm.radius * mm.halfh
+  local east, north = mm.x - wx, wy - mm.y
+  if mm.rotate then east, north = east * mm.cos + north * mm.sin, north * mm.cos - east * mm.sin end
+  local x, y = east / mm.radius * mm.halfw, north / mm.radius * mm.halfh
   local distance = math.sqrt(x * x + y * y)
   local round = true
-  if mm.shape and dx ~= 0 and dy ~= 0 then
-    local q = dx < 0 and 1 or 3
-    round = dy < 0 and mm.shape[q] or mm.shape[q + 1]
+  if mm.shape and x ~= 0 and y ~= 0 then
+    -- quadrants: { upper-left, lower-left, upper-right, lower-right }
+    local q = x < 0 and 1 or 3
+    round = y > 0 and mm.shape[q] or mm.shape[q + 1]
   end
   local inside
   if round then
@@ -643,7 +647,7 @@ function Map:RefreshMinimap()
       dress(f, v.pin, v.pin.minimapSize or 7, v.pin.alpha)
       f:SetFrameLevel(Minimap:GetFrameLevel() + 5 + (v.pin.layer or 1))
       f:ClearAllPoints()
-      f:SetPoint("CENTER", Minimap, "CENTER", -v.x, v.y)
+      f:SetPoint("CENTER", Minimap, "CENTER", v.x, v.y)
       f:Show()
       end
     end
