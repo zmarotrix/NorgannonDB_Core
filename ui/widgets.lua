@@ -520,8 +520,13 @@ function UI.Bar(parent, kind, height)
   f.fillFrame:SetPoint("TOPLEFT")
   f.fillFrame:SetHeight(h)
   f.fill = pill(f.fillFrame, h, "ARTWORK", 0)
+  -- the dividing lines and the party marker: on a frame above the fill (a child frame draws over
+  -- its parent's textures whatever their layer)
+  f.over = CreateFrame("Frame", nil, f)
+  f.over:SetAllPoints()
+  f.over:SetFrameLevel(f.fillFrame:GetFrameLevel() + 1)
   f.ticks = {}
-  f.marker = f:CreateTexture(nil, "OVERLAY", nil, 2)
+  f.marker = f.over:CreateTexture(nil, "OVERLAY", nil, 2)
   f.marker:SetTexture(TEX.circle)
   f.marker:SetSize(h + 3, h + 3)
   f.marker:Hide()
@@ -530,6 +535,7 @@ function UI.Bar(parent, kind, height)
   function f:Paint()
     local c = self.kind == "party" and UI.Mix(self.accent, { .53, .53, .53 }, .55) or self.accent
     self.fill:SetColor(c)
+    self.over:SetFrameLevel(self.fillFrame:GetFrameLevel() + 1)   -- the lines stay over the fill
     local width = self:GetWidth() or 0
     local w = width * self.ratio
     -- never narrower than its round ends
@@ -540,7 +546,7 @@ function UI.Bar(parent, kind, height)
       local t = self.ticks[i]
       if i < n then
         if not t then
-          t = self:CreateTexture(nil, "OVERLAY", nil, 1)
+          t = self.over:CreateTexture(nil, "OVERLAY", nil, 1)
           t:SetColorTexture(0, 0, 0, .55)
           t:SetSize(1, h)
           self.ticks[i] = t
