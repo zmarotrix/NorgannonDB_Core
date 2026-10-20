@@ -510,6 +510,9 @@ function UI.Bar(parent, kind, height)
   local h = height or 5
   local f = CreateFrame("Frame", nil, parent)
   f:SetHeight(h)
+  -- a dark outline, a pixel beyond the track all round, so the bar reads on any background
+  f.outline = pill(f, h, "BACKGROUND", -1, -1)
+  f.outline:SetColor({ 0, 0, 0 }, .9)
   f.track = pill(f, h, "BACKGROUND", 0)
   f.track:SetColor({ .165, .137, .102 })
   -- the fill: its own frame with a pill, so both ends are round at any width
