@@ -14,7 +14,7 @@ local UI = Core.UI
 local MB = { buttons = {} }
 Core.MinimapButton = MB
 
-local SIZE = 31
+local SIZE = 32   -- the game tracking button's size
 local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, foresight = 250, archivum = 275 }
 
 -- { upper-left, lower-left, upper-right, lower-right }: which quadrants of the minimap are round
@@ -84,14 +84,16 @@ function MB:Add(key, opts)
   b:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
   b.background = b:CreateTexture(nil, "BACKGROUND")
   b.background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-  b.background:SetSize(20, 20)
-  b.background:SetPoint("CENTER", 0, 1)
+  -- the game's own tracking button's geometry: the ring's circle isn't centred in its texture,
+  -- so the dark disc and the mark are placed from the top-left, as the game places them
+  b.background:SetSize(22, 22)
+  b.background:SetPoint("TOPLEFT", 5, -5)
   b.icon = UI.Mark(b, key, 20, "ARTWORK")
   b.icon:ClearAllPoints()
-  b.icon:SetPoint("CENTER", 0, 1)
+  b.icon:SetPoint("TOPLEFT", 6, -6)
   b.border = b:CreateTexture(nil, "OVERLAY")
   b.border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-  b.border:SetSize(53, 53)
+  b.border:SetSize(54, 54)
   b.border:SetPoint("TOPLEFT")
   b:SetScript("OnClick", function(_, button) if opts.onClick then Core.SafeCall(opts.onClick, button) end end)
   b:SetScript("OnDragStart", function(self)
