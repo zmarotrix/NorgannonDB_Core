@@ -333,3 +333,64 @@ function DBX:InstancesAt(area)
   table.sort(out)
   return out
 end
+
+-------------------------------------------------------------------------------------------
+-- Recipes (NorgannonDB 1.4): every crafting recipe, by its spell id
+-------------------------------------------------------------------------------------------
+
+local function recipes()
+  local DB = db()
+  return DB and DB.recipes or {}
+end
+
+local function recipeIndex(name, id)
+  local DB = db()
+  local index = DB and DB.index and DB.index.recipes
+  return index and index[name] and index[name][id]
+end
+
+---One recipe by spell id, or nil.
+function DBX:Recipe(id) return recipes()[id] end
+
+---The recipe's name in the client's language (the spell's name), else NorgannonDB's.
+function DBX:RecipeName(id)
+  local spell = rawget(_G, "C_Spell")
+  local getName = spell and spell.GetSpellName or rawget(_G, "GetSpellInfo")
+  if getName then
+    local ok, name = pcall(getName, id)
+    if ok and type(name) == "string" and name ~= "" then return name end
+  end
+  local rec = recipes()[id]
+  return rec and rec.name
+end
+
+---A profession's recipe ids (skill line id), by the skill they're learned at, then name.
+function DBX:Recipes(skill)
+  local all, out = recipes(), {}
+  for id, rec in pairs(all) do
+    if rec.skill == skill then out[#out + 1] = id end
+  end
+  table.sort(out, function(a, b)
+    local la, lb = all[a].learn or 0, all[b].learn or 0
+    if la ~= lb then return la < lb end
+    return (all[a].name or "") < (all[b].name or "")
+  end)
+  return out
+end
+
+---The recipes that make an item, that use it, and the one a recipe item teaches.
+function DBX:CraftedBy(itemId) return recipeIndex("craftedBy", itemId) or {} end
+function DBX:ReagentOf(itemId) return recipeIndex("reagentOf", itemId) or {} end
+function DBX:RecipeTaughtBy(itemId) return recipeIndex("taughtBy", itemId) end
+
+---A recipe's colour at a skill: "red" (can't learn it yet), "orange", "yellow", "green" or
+---"grey" (no more skill-ups); nil without a skill.
+function DBX.RecipeColor(rec, skill)
+  if not (rec and skill) then return nil end
+  local l = rec.levels
+  if skill < (rec.learn or l[1]) then return "red" end
+  if skill < l[2] then return "orange" end
+  if skill < l[3] then return "yellow" end
+  if skill < l[4] then return "green" end
+  return "grey"
+end
