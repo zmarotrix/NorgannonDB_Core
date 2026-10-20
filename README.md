@@ -1,5 +1,11 @@
 # NorgannonDB Core
 
+> [!WARNING]
+> **Very much a work in progress.** This is an early build for WoW Forever (client 1.60.1), in
+> active development and testing. Expect missing features, rough edges, bugs, and changes that
+> break things between versions. Bug reports and feedback are welcome in
+> [Issues](../../issues).
+
 The shared runtime under the NorgannonDB suite: Clairvoyance, Oracle, Foresight and Archivum.
 It ships in the NorgannonDB download and depends on NorgannonDB.
 
