@@ -383,6 +383,9 @@ function DBX:CraftedBy(itemId) return recipeIndex("craftedBy", itemId) or {} end
 function DBX:ReagentOf(itemId) return recipeIndex("reagentOf", itemId) or {} end
 function DBX:RecipeTaughtBy(itemId) return recipeIndex("taughtBy", itemId) end
 
+---What disenchants into a material: { min, max = item levels, quality = {2, 3, 4} }, or nil.
+function DBX:DisenchantedFrom(itemId) return recipeIndex("disenchant", itemId) end
+
 ---A recipe's colour at a skill: "red" (can't learn it yet), "orange", "yellow", "green" or
 ---"grey" (no more skill-ups); nil without a skill.
 function DBX.RecipeColor(rec, skill)

@@ -4,7 +4,8 @@
 --   local list = UI.List(parent, { rowHeight = 22,
 --     createRow = function(row, content) row.text = UI.Text(content, "body", 14) ... end,
 --     updateRow = function(row, item, index) row.text:SetText(item.name) end,
---     onClick = function(item, index, button) end })
+--     onClick = function(item, index, button) end,
+--     onGroupClick = function(group, index, button) end })      -- a section header clicked (to fold it)
 --   list:SetData(items)
 --
 -- Build row contents on `content` (not on the row): an item { group = "Kalimdor" } is drawn as a
@@ -71,7 +72,12 @@ function UI.List(parent, opts)
       if opts.onLeave then opts.onLeave(self, self.item, self.index) end
     end)
     row:SetScript("OnClick", function(self, button)
-      if opts.onClick and self.item and not self.item.group then opts.onClick(self.item, self.index, button) end
+      if not self.item then return end
+      if self.item.group then
+        if opts.onGroupClick then opts.onGroupClick(self.item, self.index, button) end
+      elseif opts.onClick then
+        opts.onClick(self.item, self.index, button)
+      end
     end)
     if opts.createRow then opts.createRow(row, row.content) end
     return row

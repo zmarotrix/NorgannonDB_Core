@@ -446,7 +446,7 @@ local function continentMarkers(uiMap)
     if x and y and x >= 0 and x <= 1 and y >= 0 and y <= 1 then
       local pin, n, zoneMap = g.pin, g.n, g.zoneMap
       markers[#markers + 1] = {
-        x = x * 100, y = y * 100, icon = pin.icon, quest = pin.quest, color = pin.color,
+        x = x * 100, y = y * 100, icon = pin.icon, quest = pin.quest, color = pin.color, colorKey = pin.colorKey,
         layer = pin.layer, size = (pin.icon == "pin" or pin.icon == nil) and 9 or 14, title = pin.title,
         tooltip = function(_, tt)
           if pin.tooltip then Core.SafeCall(pin.tooltip, pin, tt) else tt:AddLine(pin.title or "?", 1, 1, 1) end
