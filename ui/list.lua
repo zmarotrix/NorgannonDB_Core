@@ -5,7 +5,8 @@
 --     createRow = function(row, content) row.text = UI.Text(content, "body", 14) ... end,
 --     updateRow = function(row, item, index) row.text:SetText(item.name) end,
 --     onClick = function(item, index, button) end,
---     onGroupClick = function(group, index, button) end })      -- a section header clicked (to fold it)
+--     onGroupClick = function(group, index, button) end,       -- a section header clicked (to fold it)
+--     groupBand = true })                                        -- headers on a faint band with a rule
 --   list:SetData(items)
 --
 -- Build row contents on `content` (not on the row): an item { group = "Kalimdor" } is drawn as a
@@ -62,7 +63,24 @@ function UI.List(parent, opts)
     row.groupLabel = UI.Text(row, "title", 13, C.goldSoft)
     row.groupLabel:SetPoint("BOTTOMLEFT", 10, 3)
     row.groupLabel:Hide()
+    if opts.groupBand then
+      -- a header that reads as one: a faint band, a rule along its foot, the label centred on it
+      row.band = UI.Tex(row, "BACKGROUND", 2, { 1, 1, 1, .045 })
+      row.band:SetPoint("TOPLEFT", 0, -3)
+      row.band:SetPoint("BOTTOMRIGHT", 0, 3)
+      row.band:Hide()
+      row.rule = UI.Tex(row, "BORDER", 0, C.line)
+      row.rule:SetHeight(1)
+      row.rule:SetPoint("BOTTOMLEFT", 0, 3)
+      row.rule:SetPoint("BOTTOMRIGHT", 0, 3)
+      row.rule:Hide()
+      row.groupLabel:ClearAllPoints()
+      row.groupLabel:SetPoint("LEFT", 10, 0)
+      row.groupLabel:SetPoint("RIGHT", -10, 0)
+      row.groupLabel:SetWordWrap(false)
+    end
     row:SetScript("OnEnter", function(self)
+      if self.item and self.item.group and opts.onGroupClick then self.hl:Show() return end   -- a header to fold
       if not self.item or self.item.group then return end
       self.hl:Show()
       if opts.onEnter and self.item then opts.onEnter(self, self.item, self.index) end
@@ -111,6 +129,10 @@ function UI.List(parent, opts)
         UI.GradientH(row.hl, a, .14)
         UI.GradientH(row.sel, a, .26)
         row.bar:SetColorTexture(a[1], a[2], a[3], 1)
+        if row.band then
+          row.band:SetShown(item.group ~= nil)
+          row.rule:SetShown(item.group ~= nil)
+        end
         if item.group then
           row.groupLabel:SetText(item.group)
           row.groupLabel:Show()
