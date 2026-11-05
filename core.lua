@@ -1,5 +1,5 @@
 -- NorgannonDB_Core: the runtime library under the NorgannonDB suite (Clairvoyance, Oracle,
--- Foresight, Archivum). It owns what the addons would otherwise duplicate or fight over: the
+-- Retrospect, Archivum). It owns what the addons would otherwise duplicate or fight over: the
 -- client layer, events and messages, the UI kit, the suite registry and settings.
 -- The public API is versioned and documented in docs/core-api.md; check it at load:
 --
@@ -10,7 +10,7 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 14,
+  VERSION_MINOR = 15,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
 }

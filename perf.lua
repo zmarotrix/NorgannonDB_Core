@@ -15,7 +15,7 @@ Core.Perf = Perf
 
 local BUDGET_AVG, BUDGET_FRAME = 1, 16           -- ms
 local DEFAULT_SECONDS = 60
-local SUITE = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Foresight" }
+local SUITE = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Retrospect" }
 Perf.BUDGET_AVG, Perf.BUDGET_FRAME = BUDGET_AVG, BUDGET_FRAME
 
 ---Registers a function to time while measuring: tbl[method], shown as label (grouped by addon).

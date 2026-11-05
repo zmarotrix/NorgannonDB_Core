@@ -15,7 +15,7 @@ local MB = { buttons = {} }
 Core.MinimapButton = MB
 
 local SIZE = 32   -- the game tracking button's size
-local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, foresight = 250, archivum = 275 }
+local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, retrospect = 250, archivum = 275 }
 
 -- { upper-left, lower-left, upper-right, lower-right }: which quadrants of the minimap are round
 local SHAPES = {

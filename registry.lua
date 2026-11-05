@@ -8,7 +8,7 @@ local Core = NorgannonCore
 Core.SUITE = {
   { key = "clairvoyance", name = "Clairvoyance", folder = "Clairvoyance", accent = "4fe3cf", role = "Quest helper", slash = "/clair" },
   { key = "oracle", name = "Oracle", folder = "Oracle", accent = "b48cff", role = "Dungeon & zone atlas", slash = "/oracle" },
-  { key = "foresight", name = "Foresight", folder = "Foresight", accent = "ffb35c", role = "Goal planner", slash = "/fore" },
+  { key = "retrospect", name = "Retrospect", folder = "Retrospect", accent = "ffb35c", role = "Your characters, account-wide", slash = "/retro" },
   { key = "archivum", name = "Archivum", folder = "Archivum", accent = "7cc4ff", role = "Database browser", slash = "/arch" },
 }
 Core.FAMILY = {
@@ -57,7 +57,7 @@ function Core:AddonVersion(key)
 end
 
 -------------------------------------------------------------------------------------------
--- Actions on entities ("Show on map", "Open in Oracle", "Look up", "Set as goal")
+-- Actions on entities ("Show on map", "Open in Oracle", "Look up", "Who has this")
 -------------------------------------------------------------------------------------------
 
 local actions = {}   -- ordered list of { id, addon, label, kinds = {kind=true}, run, available }

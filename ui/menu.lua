@@ -14,7 +14,7 @@ local HINTS = {
   { addon = "clairvoyance", kinds = { npc = true, object = true, item = true }, text = "Clairvoyance can show this on the map" },
   { addon = "oracle", kinds = { instance = true, zone = true }, text = "Oracle can open this" },
   { addon = "archivum", kinds = { quest = true, npc = true, object = true, item = true, zone = true, faction = true }, text = "Archivum can look this up" },
-  { addon = "foresight", kinds = { quest = true, item = true, faction = true, skill = true }, text = "Foresight can set this as a goal" },
+  { addon = "retrospect", kinds = { quest = true, item = true }, text = "Retrospect can show which of your characters has this" },
 }
 
 local function addItems(root, items)

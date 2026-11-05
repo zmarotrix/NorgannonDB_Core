@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/WoW%20Forever-1.60.1-e7c66c?style=flat-square" alt="WoW Forever 1.60.1">
-  <img src="https://img.shields.io/badge/API-1.14-e7c66c?style=flat-square" alt="API 1.14">
+  <img src="https://img.shields.io/badge/API-1.15-e7c66c?style=flat-square" alt="API 1.15">
   <img src="https://img.shields.io/badge/status-early%20development-b0913f?style=flat-square" alt="Status: early development">
 </p>
 
@@ -31,7 +31,7 @@ of the rest.
 | <img src=".github/suite/oracle.png" width="36"> | **[Oracle](https://github.com/zmarotrix/Oracle)** | Dungeon and zone atlas: maps, bosses, loot, zones and professions |
 | <img src=".github/suite/norgannondb.png" width="36"> | **[NorgannonDB](https://github.com/zmarotrix/NorgannonDB)** | The open game database underneath, with **NorgannonDB Core**, the shared runtime |
 | <img src=".github/suite/collector.png" width="36"> | **[NorgannonDB Collector](https://github.com/zmarotrix/NorgannonDBCollector)** | Help map Azeroth: improves the database while you play |
-| <img src=".github/suite/foresight.png" width="36"> | Foresight | Planner. *Coming later* |
+| <img src=".github/suite/retrospect.png" width="36"> | **[Retrospect](https://github.com/zmarotrix/Retrospect)** | Your characters, account-wide: what each one has, knows and has waiting |
 | <img src=".github/suite/archivum.png" width="36"> | Archivum | Look anything up in game. *Coming later* |
 
 ## Getting started

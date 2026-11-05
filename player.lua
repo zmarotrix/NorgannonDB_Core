@@ -6,6 +6,7 @@
 --   NORGANNON_QUEST_PROGRESS (questId, index)   NORGANNON_QUEST_COMPLETE (questId)
 --   NORGANNON_QUEST_TURNED_IN (questId)         NORGANNON_QUESTLOG_UPDATED (changes)
 --   NORGANNON_SKILLS_CHANGED                    NORGANNON_LEVEL_CHANGED (level)
+--   NORGANNON_RECIPES_SCANNED (skillLine, count, source)
 --
 -- Uses the APIs the WoW Forever client has (C_QuestLog with quest IDs, counter-first objective
 -- text, QUEST_ACCEPTED with only the quest ID). Secret values are skipped, never compared.
@@ -210,7 +211,10 @@ local function refreshSkills()
   for id, rank in pairs(new) do if Player.skills[id] ~= rank then changed = true end end
   for id in pairs(Player.skills) do if not new[id] then changed = true end end
   Player.skills = new
-  if changed then Core:Send("NORGANNON_SKILLS_CHANGED") end
+  if changed then
+    Core:Send("NORGANNON_SKILLS_CHANGED")
+    Player:ScanRecipes()
+  end
 end
 
 ---Rank in a profession (skill line id), or nil if the player doesn't have it.
@@ -250,6 +254,101 @@ Core:On("UPDATE_FACTION", "player", function()
 end)
 
 -------------------------------------------------------------------------------------------
+-- Known recipes (1.15): { [skillLine] = { ids = { [spellId] = true }, count, source, seen } }
+-- Two readers, because the profession API only answers while the window is open:
+--   "spells": at login, every NorgannonDB recipe of each profession through IsSpellKnown
+--   "window": whenever a profession window is ready, what the client itself lists as learned
+-- The window's answer also holds recipes NorgannonDB doesn't have yet. Neither reader removes
+-- anything: a recipe, once learned, stays learned.
+-------------------------------------------------------------------------------------------
+
+Player.recipes = {}
+
+local function addRecipes(skill, ids, source)
+  local rec = Player.recipes[skill]
+  if not rec then
+    rec = { ids = {}, count = 0 }
+    Player.recipes[skill] = rec
+  end
+  for id in pairs(ids) do
+    if not rec.ids[id] then
+      rec.ids[id] = true
+      rec.count = rec.count + 1
+    end
+  end
+  if source == "window" or not rec.source then rec.source = source end
+  rec.seen = time()
+  Core:Send("NORGANNON_RECIPES_SCANNED", skill, rec.count, source)
+end
+
+local function scanSpells(skill)
+  local known = rawget(_G, "IsSpellKnown")
+  if not (known and Core.DB and Core.DB.Recipes) then return end
+  local ids, found = {}, false
+  for _, id in ipairs(Core.DB:Recipes(skill)) do
+    local ok, is = pcall(known, id)
+    if ok and is and not IsSecret(is) then ids[id], found = true, true end
+  end
+  if found then addRecipes(skill, ids, "spells") end
+end
+
+local function scanWindow()
+  local T = rawget(_G, "C_TradeSkillUI")
+  if not (T and T.IsTradeSkillReady and T.GetRecipeInfo and T.GetBaseProfessionInfo) then return end
+  local ok, ready = pcall(T.IsTradeSkillReady)
+  if not ok or not ready or IsSecret(ready) then return end
+  -- someone else's profession, opened from a chat link, says nothing about this character
+  for _, other in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild" }) do
+    if T[other] then
+      local okOther, is = pcall(T[other])
+      if okOther and is then return end
+    end
+  end
+  local okBase, base = pcall(T.GetBaseProfessionInfo)
+  local fallback = okBase and public(base) and not IsSecret(base.professionID) and base.professionID or nil
+  local list
+  for _, reader in ipairs({ "GetAllRecipeIDs", "GetFilteredRecipeIDs" }) do
+    if T[reader] then
+      local okList, got = pcall(T[reader])
+      if okList and public(got) and #got > 0 then list = got break end
+    end
+  end
+  if not list then return end
+  -- by the profession NorgannonDB files each recipe under; the client's id for the rest
+  local bySkill = {}
+  for _, id in ipairs(list) do
+    local okInfo, info = pcall(T.GetRecipeInfo, id)
+    if okInfo and public(info) and info.learned == true then
+      local record = Core.DB and Core.DB.Recipe and Core.DB:Recipe(id)
+      local skill = record and record.skill or fallback
+      if skill then
+        bySkill[skill] = bySkill[skill] or {}
+        bySkill[skill][id] = true
+      end
+    end
+  end
+  for skill, ids in pairs(bySkill) do addRecipes(skill, ids, "window") end
+end
+
+---Reads every profession's known recipes again, one profession per frame.
+function Player:ScanRecipes()
+  for skill in pairs(self.skills) do
+    Core:NextFrame(function() scanSpells(skill) end, "recipes" .. skill)
+  end
+end
+
+---What a profession's scan found: { ids = { [spellId] = true }, count, source = "window" | "spells", seen },
+---or nil if nothing has been read for it yet.
+function Player:KnownRecipes(skillLine) return self.recipes[skillLine] end
+
+---True if a scan has seen this recipe as learned; nil means "not seen", not "not known".
+function Player:KnowsRecipe(spellId)
+  for _, rec in pairs(self.recipes) do
+    if rec.ids[spellId] then return true end
+  end
+end
+
+-------------------------------------------------------------------------------------------
 -- Character and position
 -------------------------------------------------------------------------------------------
 
@@ -285,6 +384,16 @@ Core:OnLogin(function()
   Player.quests = scan()
   Player.ready = true
   Core:Send("NORGANNON_PLAYER_READY")
+  Player:ScanRecipes()
+end)
+
+for _, event in ipairs({ "TRADE_SKILL_SHOW", "TRADE_SKILL_LIST_UPDATE", "TRADE_SKILL_DATA_SOURCE_CHANGED" }) do
+  Core:On(event, "player.recipes", function() Core:NextFrame(scanWindow, "recipeWindow") end)
+end
+Core:On("NEW_RECIPE_LEARNED", "player.recipes", function(_, id)
+  if not id or IsSecret(id) then return end
+  local record = Core.DB and Core.DB.Recipe and Core.DB:Recipe(id)
+  if record and record.skill then addRecipes(record.skill, { [id] = true }, "spells") end
 end)
 
 for _, event in ipairs({ "QUEST_LOG_UPDATE", "QUEST_ACCEPTED", "QUEST_REMOVED" }) do
