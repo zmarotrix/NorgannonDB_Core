@@ -72,13 +72,14 @@ local function readObjectives(questId)
   for i, o in ipairs(list) do
     if public(o) then
       local text = not IsSecret(o.text) and o.text or nil
+      local objectiveType = not IsSecret(o.type) and o.type or nil
       local current, required = o.numFulfilled, o.numRequired
       if IsSecret(current) or IsSecret(required) then current, required = nil, nil end
       out[i] = {
-        text = text, type = not IsSecret(o.type) and o.type or nil,
+        text = text, type = objectiveType,
         finished = not IsSecret(o.finished) and o.finished or false,
         current = current, required = required,
-        name = text and Player.ObjectiveName(text, o.type),
+        name = text and Player.ObjectiveName(text, objectiveType),
       }
     else
       out[i] = { finished = false }
@@ -125,12 +126,14 @@ function Player:Refresh()
       table.insert(changes.accepted, id)
       Core:Send("NORGANNON_QUEST_ACCEPTED", id)
     else
+      local progressed = false
       for i, o in ipairs(q.objectives) do
         if not sameObjective(o, before.objectives[i]) then
-          table.insert(changes.progressed, id)
+          progressed = true
           Core:Send("NORGANNON_QUEST_PROGRESS", id, i)
         end
       end
+      if progressed then table.insert(changes.progressed, id) end
       if q.complete == true and before.complete ~= true then
         table.insert(changes.completed, id)
         Core:Send("NORGANNON_QUEST_COMPLETE", id)
