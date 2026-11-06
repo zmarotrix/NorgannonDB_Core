@@ -26,8 +26,10 @@ local MSG_VERSION = 5
 -- Questie compares this numeric version with its own to suggest updates, and answers peers
 -- above major 5 with the compact v2 list. A plain numeric version avoids both pitfalls.
 local PROTOCOL_VERSION = "6.0.0"
-local MAX_GROUP = 15
+local MAX_GROUP = 15           -- larger groups (raids, battlegrounds) would flood the channel
 local FLUSH_DELAY = 1          -- seconds: progress changes are coalesced into one update per quest
+local SHARE_DELAY = 3          -- seconds after joining before quest logs go out
+local MAX_BLOCK_BYTES = 200    -- a full-list block must fit one addon message
 
 local MSG = { UPDATE = 1, REMOVE = 2, FULL = 10, REQUEST = 11, FULL_V2 = 12, UPDATE_V2 = 14 }
 
@@ -40,7 +42,22 @@ AceComm:Embed(Comms)
 -------------------------------------------------------------------------------------------
 
 local CONTROL, ZERO = 237, 238
-local out
+local TWO_16, TWO_24, TWO_32 = 65536, 16777216, 4294967296
+
+-- Every value starts with a tag byte. These and the size thresholds in the writers below are
+-- Questie's wire format (Modules/Libs/QuestieSerializer.lua): don't tidy them. Where a number has
+-- a negative form, its tag is the positive one plus 1.
+local TAG = {
+  NIL = 1, INT = 2, NEG_INT = 3, LONG = 4, NEG_LONG = 5, FLOAT = 6,
+  STRING8 = 7, STRING16 = 8, HASHED_STRING = 9,
+  TABLE8 = 10, TABLE16 = 11,
+  BYTE = 12, NEG_BYTE = 13, SHORT = 14, NEG_SHORT = 15,
+  FALSE = 16, TRUE = 17,
+  ARRAY8 = 20, ARRAY16 = 21, ARRAY32 = 22,
+  TINY_INT = 32,     -- 32 + n: the integer n, in the tag itself
+}
+
+local out   -- the bytes being written, one string per byte
 
 local function wbyte(b)
   if b == 0 then
@@ -54,27 +71,73 @@ local function wbyte(b)
   end
 end
 
-local function wshort(v) wbyte(floor(v / 256) % 256) wbyte(v % 256) end
-local function wint(v)
-  v = v % 4294967296
-  wbyte(floor(v / 16777216) % 256) wbyte(floor(v / 65536) % 256) wbyte(floor(v / 256) % 256) wbyte(v % 256)
-end
-local function wlong(v)
-  wint(floor(v / 4294967296))
-  wint(v % 4294967296)
+local function wshort(v)
+  wbyte(floor(v / 256) % 256)
+  wbyte(v % 256)
 end
 
+local function wint(v)
+  v = v % TWO_32
+  wbyte(floor(v / TWO_24) % 256)
+  wbyte(floor(v / TWO_16) % 256)
+  wbyte(floor(v / 256) % 256)
+  wbyte(v % 256)
+end
+
+local function wlong(v)
+  wint(floor(v / TWO_32))
+  wint(v % TWO_32)
+end
+
+-- the IEEE 754 single-precision bits of a number, as an integer
 local function floatbits(n)
   local sign = 0
   if n < 0 then sign, n = 0x80, -n end
   local mant, expo = math.frexp(n)
   if mant ~= mant then return 0xFF880000 end
   if mant == math.huge or expo > 0x80 then return sign == 0 and 0x7F800000 or 0xFF800000 end
-  if (mant == 0 and expo == 0) or expo < -0x7E then return sign * 16777216 end
+  if (mant == 0 and expo == 0) or expo < -0x7E then return sign * TWO_24 end
   expo = expo + 0x7E
   mant = floor((mant * 2 - 1) * math.ldexp(0.5, 24))
-  return (sign + floor(expo / 2)) * 16777216 + ((expo % 2) * 0x80 + floor(mant / 0x10000)) * 65536
+  return (sign + floor(expo / 2)) * TWO_24 + ((expo % 2) * 0x80 + floor(mant / 0x10000)) * TWO_16
     + (floor(mant / 0x100) % 0x100) * 256 + mant % 0x100
+end
+
+local function writeNumber(v)
+  if v % 1 ~= 0 then
+    wbyte(TAG.FLOAT)
+    wint(floatbits(v))
+    return
+  end
+  local sign = 0
+  if v < 0 then v, sign = -v, 1 end
+  if v > 2147483646 then
+    wbyte(TAG.LONG + sign)
+    wlong(v)
+  elseif v < 222 and sign == 0 then
+    wbyte(TAG.TINY_INT + v)
+  elseif v < 255 then
+    wbyte(TAG.BYTE + sign)
+    wbyte(v)
+  elseif v < 65530 then
+    wbyte(TAG.SHORT + sign)
+    wshort(v)
+  else
+    wbyte(TAG.INT + sign)
+    wint(v)
+  end
+end
+
+local function writeString(v)
+  local len = #v
+  if len > 254 then
+    wbyte(TAG.STRING16)
+    wshort(len)
+  else
+    wbyte(TAG.STRING8)
+    wbyte(len)
+  end
+  for i = 1, len do wbyte(byte(v, i)) end
 end
 
 local function isarray(t, count)
@@ -85,64 +148,51 @@ local function isarray(t, count)
 end
 
 local write
+
+local function writeTable(v)
+  local count = 0
+  for _, inner in pairs(v) do
+    if inner ~= nil then count = count + 1 end
+  end
+  if isarray(v, count) then
+    if count > 65530 then
+      wbyte(TAG.ARRAY32)
+      wint(count)
+    elseif count > 254 then
+      wbyte(TAG.ARRAY16)
+      wshort(count)
+    else
+      wbyte(TAG.ARRAY8)
+      wbyte(count)
+    end
+    for i = 1, count do write(v[i]) end
+  else
+    if count > 254 then
+      wbyte(TAG.TABLE16)
+      wshort(count)
+    else
+      wbyte(TAG.TABLE8)
+      wbyte(count)
+    end
+    for key, inner in pairs(v) do
+      write(key)
+      write(inner)
+    end
+  end
+end
+
 write = function(v)
   local t = type(v)
   if t == "number" then
-    if v % 1 ~= 0 then
-      wbyte(6)
-      wint(floatbits(v))
-      return
-    end
-    local sign = 0
-    if v < 0 then v, sign = -v, 1 end
-    if v > 2147483646 then
-      wbyte(4 + sign) wlong(v)
-    elseif v < 222 and sign == 0 then
-      wbyte(32 + v)
-    elseif v < 255 then
-      wbyte(12 + sign) wbyte(v)
-    elseif v < 65530 then
-      wbyte(14 + sign) wshort(v)
-    else
-      wbyte(2 + sign) wint(v)
-    end
+    writeNumber(v)
   elseif t == "string" then
-    local len = #v
-    if len > 254 then
-      wbyte(8) wshort(len)
-    else
-      wbyte(7) wbyte(len)
-    end
-    for i = 1, len do wbyte(byte(v, i)) end
+    writeString(v)
   elseif t == "boolean" then
-    wbyte(v and 17 or 16)
+    wbyte(v and TAG.TRUE or TAG.FALSE)
   elseif t == "table" then
-    local count = 0
-    for _, inner in pairs(v) do
-      if inner ~= nil then count = count + 1 end
-    end
-    if isarray(v, count) then
-      if count > 65530 then
-        wbyte(22) wint(count)
-      elseif count > 254 then
-        wbyte(21) wshort(count)
-      else
-        wbyte(20) wbyte(count)
-      end
-      for i = 1, count do write(v[i]) end
-    else
-      if count > 254 then
-        wbyte(11) wshort(count)
-      else
-        wbyte(10) wbyte(count)
-      end
-      for key, inner in pairs(v) do
-        write(key)
-        write(inner)
-      end
-    end
+    writeTable(v)
   else
-    wbyte(1)
+    wbyte(TAG.NIL)
   end
 end
 
@@ -155,7 +205,7 @@ function Comms.Serialize(tab)
   return result
 end
 
-local data, pos, hashes
+local data, pos, hashes   -- the message being read, where we are in it, the strings seen so far
 
 local function rbyte()
   local v = byte(data, pos)
@@ -170,8 +220,8 @@ local function rbyte()
   return v
 end
 local function rshort() return rbyte() * 256 + rbyte() end
-local function rint() return rbyte() * 16777216 + rbyte() * 65536 + rbyte() * 256 + rbyte() end
-local function rlong() return rint() * 4294967296 + rint() end
+local function rint() return rbyte() * TWO_24 + rbyte() * TWO_16 + rbyte() * 256 + rbyte() end
+local function rlong() return rint() * TWO_32 + rint() end
 
 local function rstring(len)
   local chars = {}
@@ -179,8 +229,9 @@ local function rstring(len)
   return concat(chars)
 end
 
+-- the reverse of floatbits
 local function bitsfloat(int)
-  local b1, b2 = floor(int / 16777216) % 256, floor(int / 65536) % 256
+  local b1, b2 = floor(int / TWO_24) % 256, floor(int / TWO_16) % 256
   local b3, b4 = floor(int / 256) % 256, int % 256
   local sign = b1 > 0x7F and -1 or 1
   local expo = (b1 % 0x80) * 2 + floor(b2 / 0x80)
@@ -193,7 +244,7 @@ end
 -- Questie references repeated strings (over 4 characters) by a djb2 hash of an earlier one
 local function hash(s)
   local h = 5381
-  for i = 1, #s do h = (31 * h + byte(s, i)) % 4294967296 end
+  for i = 1, #s do h = (31 * h + byte(s, i)) % TWO_32 end
   return h
 end
 
@@ -228,33 +279,33 @@ local function rarray(count)
 end
 
 local readers = {
-  [1] = function() return nil end,
-  [2] = function() return rint() end,
-  [3] = function() return -rint() end,
-  [4] = function() return rlong() end,
-  [5] = function() return -rlong() end,
-  [6] = function() return bitsfloat(rint()) end,
-  [7] = function() return rstring(rbyte()) end,
-  [8] = function() return rstring(rshort()) end,
-  [9] = function() return hashes[rint()] end,
-  [10] = function() return rtable(rbyte()) end,
-  [11] = function() return rtable(rshort()) end,
-  [12] = function() return rbyte() end,
-  [13] = function() return -rbyte() end,
-  [14] = function() return rshort() end,
-  [15] = function() return -rshort() end,
-  [16] = function() return false end,
-  [17] = function() return true end,
-  [18] = function() return nil end,
+  [TAG.NIL] = function() return nil end,
+  [TAG.INT] = function() return rint() end,
+  [TAG.NEG_INT] = function() return -rint() end,
+  [TAG.LONG] = function() return rlong() end,
+  [TAG.NEG_LONG] = function() return -rlong() end,
+  [TAG.FLOAT] = function() return bitsfloat(rint()) end,
+  [TAG.STRING8] = function() return rstring(rbyte()) end,
+  [TAG.STRING16] = function() return rstring(rshort()) end,
+  [TAG.HASHED_STRING] = function() return hashes[rint()] end,
+  [TAG.TABLE8] = function() return rtable(rbyte()) end,
+  [TAG.TABLE16] = function() return rtable(rshort()) end,
+  [TAG.BYTE] = function() return rbyte() end,
+  [TAG.NEG_BYTE] = function() return -rbyte() end,
+  [TAG.SHORT] = function() return rshort() end,
+  [TAG.NEG_SHORT] = function() return -rshort() end,
+  [TAG.FALSE] = function() return false end,
+  [TAG.TRUE] = function() return true end,
+  [18] = function() return nil end,   -- Questie reads these two as nil as well
   [19] = function() return nil end,
-  [20] = function() return rarray(rbyte()) end,
-  [21] = function() return rarray(rshort()) end,
-  [22] = function() return rarray(rint()) end,
+  [TAG.ARRAY8] = function() return rarray(rbyte()) end,
+  [TAG.ARRAY16] = function() return rarray(rshort()) end,
+  [TAG.ARRAY32] = function() return rarray(rint()) end,
 }
 
 read = function()
   local typ = rbyte()
-  if typ > 31 then return typ - 32 end
+  if typ >= TAG.TINY_INT then return typ - TAG.TINY_INT end
   local reader = readers[typ]
   if not reader then error("unknown type " .. typ, 0) end
   return reader()
@@ -262,6 +313,7 @@ end
 
 function Comms.Deserialize(message)
   data, pos, hashes = message, 1, {}
+  -- the payload is the value of a one-pair table (see Serialize); a bad message just reads as nil
   local ok, result = pcall(rtable, 1)
   data, hashes = nil, nil
   return ok and result[1] or nil
@@ -309,7 +361,6 @@ local function localObjectives(questId)
   end
   return objectives
 end
-Comms.LocalObjectives = localObjectives
 
 local function groupChannel()
   if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return "INSTANCE_CHAT" end
@@ -323,9 +374,8 @@ end
 
 function Comms:Send(p, distribution, target, priority)
   if not distribution then return end
-  if distribution ~= "WHISPER" and (GetNumGroupMembers() > MAX_GROUP or (UnitInBattleground and UnitInBattleground("player"))) then
-    return
-  end
+  local crowd = GetNumGroupMembers() > MAX_GROUP or (UnitInBattleground and UnitInBattleground("player"))
+  if distribution ~= "WHISPER" and crowd then return end
   local ok, message = pcall(Comms.Serialize, p)
   if ok and message then self:SendCommMessage(PREFIX, message, distribution, target, priority or "NORMAL") end
 end
@@ -349,29 +399,41 @@ function Comms:SendQuestRemove(questId)
   end
 end
 
--- The whole quest log as v2 blocks, each small enough for one addon message.
+-- one quest in the v2 flat layout: questId, n, (id, typeByte, fulfilled, required) x n
+local function flatQuest(questId)
+  local objectives = localObjectives(questId)
+  if not (objectives and objectives[1]) then return nil end
+  local entry = { questId, #objectives }
+  for _, o in ipairs(objectives) do
+    entry[#entry + 1] = o.id or 0
+    entry[#entry + 1] = byte(o.typ)
+    entry[#entry + 1] = o.ful
+    entry[#entry + 1] = o.req
+  end
+  return entry
+end
+
+local function append(list, values)
+  for _, v in ipairs(values) do list[#list + 1] = v end
+end
+
+-- The whole quest log as v2 blocks, each small enough for one addon message. A block is
+-- { questCount, flatQuest..., flatQuest... }; a quest that would overflow starts the next one.
 function Comms:SendQuestLog(distribution, target)
   distribution = distribution or groupChannel()
   if not distribution then return end
   local blocks, block, count = {}, { 0 }, 0
   for _, questId in ipairs(Core.Player:QuestIds()) do
-    local objectives = localObjectives(questId)
-    if objectives and objectives[1] then
-      local entry = { questId, #objectives }
-      for _, o in ipairs(objectives) do
-        entry[#entry + 1] = o.id or 0
-        entry[#entry + 1] = byte(o.typ)
-        entry[#entry + 1] = o.ful
-        entry[#entry + 1] = o.req
-      end
+    local entry = flatQuest(questId)
+    if entry then
       local candidate = {}
-      for i, v in ipairs(block) do candidate[i] = v end
-      for _, v in ipairs(entry) do candidate[#candidate + 1] = v end
+      append(candidate, block)
+      append(candidate, entry)
       candidate[1] = count + 1
-      if count > 0 and #Comms.Serialize(candidate) > 200 then
+      if count > 0 and #Comms.Serialize(candidate) > MAX_BLOCK_BYTES then
         blocks[#blocks + 1] = block
         block, count = { 1 }, 1
-        for _, v in ipairs(entry) do block[#block + 1] = v end
+        append(block, entry)
       else
         block, count = candidate, count + 1
       end
@@ -393,6 +455,10 @@ end
 -------------------------------------------------------------------------------------------
 -- Their progress
 -------------------------------------------------------------------------------------------
+
+local function isGroupMember(player)
+  return UnitInParty(player) or UnitInRaid(player)
+end
 
 local function store(questId, player, objectives)
   Comms.remote[questId] = Comms.remote[questId] or {}
@@ -417,7 +483,9 @@ local function readV2(list, offset, player)
   for i = 1, count do
     local id, typ, ful, req = list[offset], list[offset + 1], list[offset + 2], list[offset + 3]
     if not typ then break end
-    objectives[i] = { id = id ~= 0 and id or nil, type = char(typ), fulfilled = ful, required = req, finished = ful == req }
+    objectives[i] = {
+      id = id ~= 0 and id or nil, type = char(typ), fulfilled = ful, required = req, finished = ful == req,
+    }
     offset = offset + 4
   end
   store(questId, player, objectives)
@@ -435,8 +503,12 @@ end
 
 local handlers = {
   [MSG.UPDATE] = function(p, player) readV1(p.quest, player) end,
-  [MSG.REMOVE] = function(p, player) if p.id then forget(p.id, player) end end,
-  [MSG.FULL] = function(p, player) for _, quest in pairs(p.rawQuestList or {}) do readV1(quest, player) end end,
+  [MSG.REMOVE] = function(p, player)
+    if p.id then forget(p.id, player) end
+  end,
+  [MSG.FULL] = function(p, player)
+    for _, quest in pairs(p.rawQuestList or {}) do readV1(quest, player) end
+  end,
   [MSG.REQUEST] = function(_, player) Comms:SendQuestLog("WHISPER", player) end,
   [MSG.FULL_V2] = function(p, player)
     local list = p[1]
@@ -447,7 +519,9 @@ local handlers = {
       if not offset then break end
     end
   end,
-  [MSG.UPDATE_V2] = function(p, player) if type(p[1]) == "table" then readV2(p[1], 1, player) end end,
+  [MSG.UPDATE_V2] = function(p, player)
+    if type(p[1]) == "table" then readV2(p[1], 1, player) end
+  end,
 }
 
 local function isSelf(sender)
@@ -457,14 +531,14 @@ end
 local CHANNELS = { WHISPER = true, PARTY = true, RAID = true, INSTANCE_CHAT = true }
 
 function Comms:OnCommReceived(prefix, message, distribution, sender)
-  if prefix ~= PREFIX or type(message) ~= "string" or Core.IsSecret(message) or type(sender) ~= "string"
-    or Core.IsSecret(sender) or isSelf(sender) or not CHANNELS[distribution] then
-    return
-  end
+  if prefix ~= PREFIX then return end
+  if type(message) ~= "string" or Core.IsSecret(message) then return end
+  if type(sender) ~= "string" or Core.IsSecret(sender) then return end
+  if isSelf(sender) or not CHANNELS[distribution] then return end
   local p = Comms.Deserialize(message)
   if type(p) ~= "table" or type(p.msgVer) ~= "number" or floor(p.msgVer) ~= MSG_VERSION then return end
   local handler = handlers[p.msgId]
-  if handler then pcall(handler, p, sender) end
+  if handler then pcall(handler, p, sender) end   -- whatever a peer sends must not raise an error here
 end
 
 Comms:RegisterComm(PREFIX, "OnCommReceived")
@@ -473,12 +547,29 @@ Comms:RegisterComm(PREFIX, "OnCommReceived")
 function Comms:GetParty(questId)
   local out = {}
   for player, objectives in pairs(self.remote[questId] or {}) do
-    if UnitInParty(player) or UnitInRaid(player) then out[player] = objectives end
+    if isGroupMember(player) then out[player] = objectives end
   end
   return out
 end
 
 local TYPE_KIND = { m = "npcs", o = "objects", i = "items" }
+
+-- true if an NPC or object drops the item (or, for an NPC, sells it)
+local function itemComesFrom(itemId, kind, id)
+  local info = Core.DB:ItemInfo(itemId)
+  if not info then return false end
+  local drops = info.drops
+  if kind == "npcs" then return (drops.npcs and drops.npcs[id] or info.vendors[id]) and true or false end
+  return (drops.objects and drops.objects[id]) and true or false
+end
+
+-- true if a party objective is about this entity
+local function objectiveConcerns(o, kind, id)
+  if not o.id then return false end
+  local objectiveKind = TYPE_KIND[o.type]
+  if objectiveKind == kind and o.id == id then return true end
+  return objectiveKind == "items" and (kind == "npcs" or kind == "objects") and itemComesFrom(o.id, kind, id)
+end
 
 ---Every party objective about an entity: { {questId, player, index, objective}, ... }.
 ---kind is "npcs", "objects" or "items"; an item objective also matches its droppers and vendors.
@@ -486,16 +577,11 @@ function Comms:ProgressFor(kind, id)
   local hits = {}
   for questId, players in pairs(self.remote) do
     for player, objectives in pairs(players) do
-      if UnitInParty(player) or UnitInRaid(player) then
+      if isGroupMember(player) then
         for index, o in pairs(objectives) do
-          local okind = TYPE_KIND[o.type]
-          local match = o.id and okind == kind and o.id == id
-          if not match and o.id and okind == "items" and (kind == "npcs" or kind == "objects") then
-            local info = Core.DB:ItemInfo(o.id)
-            match = info and ((kind == "npcs" and (info.drops.npcs and info.drops.npcs[id] or info.vendors[id]))
-              or (kind == "objects" and info.drops.objects and info.drops.objects[id])) and true or false
+          if objectiveConcerns(o, kind, id) then
+            hits[#hits + 1] = { questId = questId, player = player, index = index, objective = o }
           end
-          if match then hits[#hits + 1] = { questId = questId, player = player, index = index, objective = o } end
         end
       end
     end
@@ -510,7 +596,11 @@ end
 local function flush()
   Comms.flushing = nil
   for questId, kind in pairs(Comms.pending) do
-    if kind == "remove" then Comms:SendQuestRemove(questId) else Comms:SendQuestUpdate(questId) end
+    if kind == "remove" then
+      Comms:SendQuestRemove(questId)
+    else
+      Comms:SendQuestUpdate(questId)
+    end
   end
   Comms.pending = {}
 end
@@ -523,7 +613,6 @@ local function changed(questId, removed)
     C_Timer.After(FLUSH_DELAY, flush)
   end
 end
-Comms.QuestChanged = function(_, questId, removed) changed(questId, removed) end
 
 Core:Listen("NORGANNON_QUEST_ACCEPTED", "comms", function(_, id) changed(id) end)
 Core:Listen("NORGANNON_QUEST_PROGRESS", "comms", function(_, id) changed(id) end)
@@ -539,14 +628,17 @@ local function rosterChanged(event)
   if not groupChannel() then return end
   local now = GetNumGroupMembers()
   if event == "GROUP_JOINED" or event == "PLAYER_ENTERING_WORLD" then
-    C_Timer.After(3, function() Comms:RequestQuestLogs() Comms:SendQuestLog() end)
+    C_Timer.After(SHARE_DELAY, function()
+      Comms:RequestQuestLogs()
+      Comms:SendQuestLog()
+    end)
   elseif now > members then
-    C_Timer.After(3, function() Comms:SendQuestLog() end)   -- someone joined: they need ours
+    C_Timer.After(SHARE_DELAY, function() Comms:SendQuestLog() end)   -- someone joined: they need ours
   end
   members = now
   for questId, players in pairs(Comms.remote) do
     for player in pairs(players) do
-      if not (UnitInParty(player) or UnitInRaid(player)) then forget(questId, player) end
+      if not isGroupMember(player) then forget(questId, player) end
     end
   end
 end
