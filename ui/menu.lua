@@ -1,21 +1,12 @@
 -- The shared action menu: a right-click menu for any entity, built with the game's own context
 -- menus (MenuUtil). The caller adds its own items; the menu then adds the actions other suite
--- add-ons registered for the entity (Core:RegisterAction), and at most one quiet line about a
--- suite add-on that isn't installed but could help ("Oracle can open this dungeon").
+-- add-ons registered for the entity (Core:RegisterAction).
 --
 --   Core:ShowActionMenu(owner, "quest", 788, { title = "Cutting Teeth", items = {
 --     { text = "Show on map", func = fn }, "-", { text = "Abandon quest…", func = fn, disabled = false },
 --   } })
 
 local Core = NorgannonCore
-
--- what each suite add-on would offer, to mention it once when it is missing
-local HINTS = {
-  { addon = "clairvoyance", kinds = { npc = true, object = true, item = true }, text = "Clairvoyance can show this on the map" },
-  { addon = "oracle", kinds = { instance = true, zone = true }, text = "Oracle can open this" },
-  { addon = "archivum", kinds = { quest = true, npc = true, object = true, item = true, zone = true, faction = true }, text = "Archivum can look this up" },
-  { addon = "retrospect", kinds = { quest = true, item = true }, text = "Retrospect can show which of your characters has this" },
-}
 
 local function addItems(root, items)
   for _, item in ipairs(items or {}) do
@@ -28,17 +19,11 @@ local function addItems(root, items)
   end
 end
 
----The suite part of a menu: registered actions for the entity, then one hint for a missing add-on.
+---The suite part of a menu: the actions registered for the entity.
 function Core:SuiteMenuItems(kind, id)
   local items = {}
   for _, action in ipairs(self:ActionsFor(kind, id)) do
     items[#items + 1] = { text = action.label, func = function() action.run(kind, id) end }
-  end
-  for _, hint in ipairs(HINTS) do
-    if hint.kinds[kind] and self:AddonState(hint.addon) == "missing" then
-      items[#items + 1] = { text = hint.text, disabled = true }
-      break
-    end
   end
   return items
 end
