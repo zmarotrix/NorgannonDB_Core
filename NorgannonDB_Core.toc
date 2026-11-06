@@ -34,6 +34,8 @@ ui\controls.lua
 ui\itembutton.lua
 ui\minimapbutton.lua
 colors.lua
+map_icons.lua
+map_cluster.lua
 map.lua
 arrow.lua
 compass.lua

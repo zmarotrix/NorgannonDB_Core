@@ -23,11 +23,7 @@ local Map = { owners = {}, stats = { world = 0, minimap = 0, clusters = 0 } }
 Core.Map = Map
 
 local WORLD_LEVEL = 2015          -- Blizzard's map pins start around 2000; stay above them
-local CLUSTER_DISTANCE = 7        -- percent of the map: pins this close join one cluster
-local CLUSTER_AREA_MIN = 6        -- a cluster this big gets a soft glow, shown while its quest is hovered
-local CLUSTER_GLOW_MARGIN = 3     -- percent of the map: how far a glow reaches past its outermost pins
 local CLUSTER_GLOW_ALPHA = .4     -- shown only on hover, so it can be fairly strong
-local GRID_STRIDE = 1024          -- packs a grid cell's column and row into one key
 local MINIMAP_MAX = 150           -- most pins drawn on the minimap, nearest first
 local MINIMAP_EDGE_MARGIN = 6     -- pixels: a pin closer to the edge than this isn't drawn
 local THROTTLE = 0.05             -- seconds between redraw checks
@@ -36,119 +32,13 @@ local HOVER_GROW = 1.25           -- a hovered pin's size
 local OVERLAP_REACH = .9          -- of a pin's size: closer than this, two pins with one overlapKey "stack"
 local CONTINENT_DOT, CONTINENT_ICON = 9, 14   -- marker sizes on continent maps: a plain pin, anything else
 
--- Pin icons. Quest givers use the game's own marks so they read like the default UI: the
--- client's atlas first, the classic gossip icon second, our own glyph only as a last resort.
--- grey = desaturated (low-level available quests, turn-ins that are not complete yet).
-local ICONS = {
-  pin = { file = UI.TEX.pin, tint = true },
-  diamond = { file = UI.TEX.pinDiamond, tint = true },
-  exclaim = { atlas = "QuestNormal", file = "Interface\\GossipFrame\\AvailableQuestIcon", fallback = UI.TEX.exclaim },
-  exclaimDaily = { atlas = "QuestDaily", file = "Interface\\GossipFrame\\DailyQuestIcon", fallback = UI.TEX.exclaim },
-  exclaimGrey = { atlas = "QuestNormal", file = "Interface\\GossipFrame\\AvailableQuestIcon", fallback = UI.TEX.exclaim, grey = true },
-  question = { atlas = "QuestTurnin", file = "Interface\\GossipFrame\\ActiveQuestIcon", fallback = UI.TEX.question },
-  questionRepeat = { atlas = "QuestRepeatableTurnin", file = "Interface\\GossipFrame\\DailyActiveQuestIcon", fallback = UI.TEX.question },
-  questionGrey = { atlas = "QuestTurnin", file = "Interface\\GossipFrame\\IncompleteQuestIcon", fallback = UI.TEX.question, grey = true },
-}
-Map.ICONS = ICONS
+local Icons = Core.MapIcons
+local setIcon = Icons.Set
+Map.ICONS, Map.SERVICE_ICONS = Icons.ICONS, Icons.SERVICE_ICONS
+Map.IconSource, Map.SetIcon = Icons.Source, setIcon
 
--- Town services and gathering (Core 1.8): the client's own icons, the ones pfQuest copied.
--- The modern minimap-tracking atlas first, the classic Minimap\Tracking file second, then a
--- spell or item icon cropped round. Never tinted. `/norg icons` shows which one loaded.
-local TRACKING, ICON = "Interface\\Minimap\\Tracking\\", "Interface\\Icons\\"
-local SERVICE_ICONS = {
-  auctioneer = { atlas = "Auctioneer", files = { TRACKING .. "Auctioneer" }, round = ICON .. "INV_Misc_Coin_02" },
-  banker = { atlas = "Banker", files = { TRACKING .. "Banker" }, round = ICON .. "INV_Misc_Bag_10" },
-  battlemaster = { atlas = "BattleMaster", files = { TRACKING .. "BattleMaster" }, round = ICON .. "INV_BannerPVP_01" },
-  flight = { atlas = "FlightMaster", files = { TRACKING .. "FlightMaster", "Interface\\TaxiFrame\\UI-Taxi-Icon-Green" },
-    round = ICON .. "Ability_Mount_Wyvern_01" },
-  innkeeper = { atlas = "Innkeeper", files = { TRACKING .. "Innkeeper" }, round = ICON .. "INV_Misc_Rune_01" },
-  mailbox = { atlas = "Mailbox", files = { TRACKING .. "Mailbox" }, round = ICON .. "INV_Letter_15" },
-  repair = { atlas = "Repair", files = { TRACKING .. "Repair" }, round = ICON .. "Trade_BlackSmithing" },
-  stablemaster = { atlas = "StableMaster", files = { TRACKING .. "StableMaster" }, round = ICON .. "Ability_Hunter_BeastTaming" },
-  vendor = { atlas = "Food", files = { TRACKING .. "Food" }, round = ICON .. "INV_Misc_Food_14" },
-  trainer = { atlas = "Class", files = { TRACKING .. "Class" }, round = ICON .. "INV_Misc_Book_09" },
-  spirithealer = { round = ICON .. "Spell_Holy_Resurrection" },
-  meetingstone = { round = ICON .. "Spell_Shadow_Twilight" },      -- Ritual of Summoning
-  chests = { round = ICON .. "Racial_Dwarf_FindTreasure" },
-  herbs = { round = ICON .. "INV_Misc_Flower_02" },                 -- Find Herbs
-  mines = { round = ICON .. "Spell_Nature_Earthquake" },            -- Find Minerals
-  fish = { round = ICON .. "Trade_Fishing" },
-}
-for key, spec in pairs(SERVICE_ICONS) do
-  spec.fallback = UI.TEX.pinDiamond
-  ICONS["service." .. key] = spec
-end
-Map.SERVICE_ICONS = SERVICE_ICONS
-
-local function hasAtlas(name)
-  return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
-end
-
--- a square icon cropped to a circle: trimmed border and a round mask (made once per frame)
-local ROUND_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-
-local function setRound(tex, round)
-  local parent = tex:GetParent()
-  local mask = parent and parent.ndbRoundMask
-  if round and not mask and parent and parent.CreateMaskTexture then
-    mask = parent:CreateMaskTexture()
-    mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIONAL", "CLAMPTOBLACKADDITIONAL")
-    mask:SetAllPoints(tex)
-    parent.ndbRoundMask = mask
-  end
-  if round then
-    tex:SetTexCoord(.08, .92, .08, .92)
-    if mask and not tex.ndbMasked then tex:AddMaskTexture(mask) tex.ndbMasked = true end
-  else
-    tex:SetTexCoord(0, 1, 0, 1)
-    if mask and tex.ndbMasked then tex:RemoveMaskTexture(mask) tex.ndbMasked = nil end
-  end
-end
-
--- SetTexture reports false for a missing file on modern clients
-local function tryFile(tex, file) return file and tex:SetTexture(file) ~= false end
-
----Which source of an icon the client has: "atlas", "file", "round" or "fallback" (and the name).
-function Map.IconSource(name)
-  local spec = ICONS[name]
-  if not spec then return nil end
-  if spec.atlas and hasAtlas(spec.atlas) then return "atlas", spec.atlas end
-  local probe = Map.probe
-  if not probe then
-    probe = UIParent:CreateTexture()
-    probe:Hide()
-    Map.probe = probe
-  end
-  for _, file in ipairs(spec.files or { spec.file }) do
-    if tryFile(probe, file) then return "file", file end
-  end
-  if tryFile(probe, spec.round) then return "round", spec.round end
-  return "fallback", spec.fallback
-end
-
--- Sets a pin texture from ICONS (or a plain texture path); returns whether it may be tinted.
-local function setIcon(tex, name)
-  local spec = ICONS[name or "pin"]
-  tex:SetDesaturated(false)
-  local round = false
-  if not spec then
-    tex:SetTexture(name)
-  elseif spec.atlas and hasAtlas(spec.atlas) then
-    tex:SetAtlas(spec.atlas)
-  else
-    local done = false
-    for _, file in ipairs(spec.files or { spec.file }) do
-      if tryFile(tex, file) then done = true break end
-    end
-    if not done and tryFile(tex, spec.round) then done, round = true, true end
-    if not done then tex:SetTexture(spec.fallback or UI.TEX.pin) end
-  end
-  setRound(tex, round)
-  if spec and spec.grey then tex:SetDesaturated(true) end
-  if not spec then return true end
-  return spec.tint or false
-end
-Map.SetIcon = setIcon
+local clusterPins = Core.ClusterPins
+Map.Cluster = clusterPins
 
 local function maps() return NorgannonDB and NorgannonDB.maps end
 function Map.AreaToUiMap(area)
@@ -219,97 +109,6 @@ local function worldOf(pin)
   if cached then return cached[1], cached[2], cached[3] end
 end
 Map.WorldOf = worldOf
-
--------------------------------------------------------------------------------------------
--- Clustering: single-link within CLUSTER_DISTANCE, per cluster key, through a grid so it
--- stays linear in the number of pins
--------------------------------------------------------------------------------------------
-
--- A group's pins as sets linked by steps of at most CLUSTER_DISTANCE (a union-find). Each pin
--- only compares with those in its own and the neighbouring grid cells.
-local function linkedSets(group)
-  local parent, grid = {}, {}
-  local function find(i)
-    while parent[i] ~= i do
-      parent[i] = parent[parent[i]]
-      i = parent[i]
-    end
-    return i
-  end
-  local d2 = CLUSTER_DISTANCE * CLUSTER_DISTANCE
-  for i, pin in ipairs(group) do
-    parent[i] = i
-    local ri = i   -- the root of i's set, kept current so each pair needs one find
-    local px, py = pin.x, pin.y
-    local cx, cy = math.floor(px / CLUSTER_DISTANCE), math.floor(py / CLUSTER_DISTANCE)
-    for gx = cx - 1, cx + 1 do
-      for gy = cy - 1, cy + 1 do
-        local cell = grid[gx * GRID_STRIDE + gy]
-        if cell then
-          for n = 1, #cell do
-            local j = cell[n]
-            local o = group[j]
-            local dx, dy = px - o.x, py - o.y
-            if dx * dx + dy * dy <= d2 then
-              local rj = find(j)
-              if ri ~= rj then
-                parent[ri] = rj
-                ri = rj
-              end
-            end
-          end
-        end
-      end
-    end
-    local key = cx * GRID_STRIDE + cy
-    local cell = grid[key]
-    if not cell then
-      cell = {}
-      grid[key] = cell
-    end
-    cell[#cell + 1] = i
-  end
-  local sets = {}
-  for i in ipairs(group) do
-    local root = find(i)
-    sets[root] = sets[root] or {}
-    table.insert(sets[root], group[i])
-  end
-  return sets
-end
-
--- the glow's ellipse around a set of pins
-local function clusterOf(members)
-  local sx, sy = 0, 0
-  for _, p in ipairs(members) do sx, sy = sx + p.x, sy + p.y end
-  local mx, my = sx / #members, sy / #members
-  local rx, ry = 0, 0
-  for _, p in ipairs(members) do
-    rx, ry = math.max(rx, math.abs(p.x - mx)), math.max(ry, math.abs(p.y - my))
-  end
-  return { x = mx, y = my, rx = rx + CLUSTER_GLOW_MARGIN, ry = ry + CLUSTER_GLOW_MARGIN, members = members,
-    color = members[1].color }
-end
-
-local function clusterPins(pins)
-  local groups = {}
-  for _, pin in ipairs(pins) do
-    if pin.cluster then
-      groups[pin.cluster] = groups[pin.cluster] or {}
-      table.insert(groups[pin.cluster], pin)
-    end
-  end
-  local clusters = {}
-  for _, group in pairs(groups) do
-    if #group >= CLUSTER_AREA_MIN then
-      for _, members in pairs(linkedSets(group)) do
-        if #members >= CLUSTER_AREA_MIN then table.insert(clusters, clusterOf(members)) end
-      end
-    end
-  end
-  return clusters
-end
-Map.Cluster = clusterPins
 
 -------------------------------------------------------------------------------------------
 -- Pin frames
