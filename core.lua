@@ -49,6 +49,22 @@ local function validEvent(event)
   return true
 end
 
+-- Adds or replaces an owner's function in registry[key], which must exist. A new owner goes into
+-- a copy of the list: a dispatch may be looping over it right now (a listener can register
+-- another), and adding a key to a table during pairs is undefined in Lua. The new owner hears
+-- from the next dispatch on.
+local function setOwner(registry, key, owner, fn)
+  local list = registry[key]
+  if list[owner] ~= nil then
+    list[owner] = fn
+    return
+  end
+  local copy = {}
+  for existing, existingFn in pairs(list) do copy[existing] = existingFn end
+  copy[owner] = fn
+  registry[key] = copy
+end
+
 ---Calls fn(event, ...) for a game event. owner keys the handler (one per owner and event).
 ---Returns false for events this client does not have.
 function Core:On(event, owner, fn)
@@ -58,7 +74,7 @@ function Core:On(event, owner, fn)
     if not pcall(eventFrame.RegisterEvent, eventFrame, event) then return false end
     handlers[event] = {}
   end
-  handlers[event][owner] = fn
+  setOwner(handlers, event, owner, fn)
   return true
 end
 
@@ -86,7 +102,7 @@ local listeners = {}  -- message -> { owner -> fn }
 
 function Core:Listen(message, owner, fn)
   listeners[message] = listeners[message] or {}
-  listeners[message][owner] = fn
+  setOwner(listeners, message, owner, fn)
 end
 
 function Core:Unlisten(message, owner)
