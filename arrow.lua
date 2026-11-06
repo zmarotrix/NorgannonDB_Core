@@ -158,7 +158,8 @@ function Arrow:Update()
     if not self.arrived then
       self.arrived = true
       Core:Send("NORGANNON_ARROW_ARRIVED", target)
-      Arrow:Clear("arrived")
+      -- a listener may already have pointed the arrow somewhere new
+      if self.target == target then Arrow:Clear("arrived") end
     end
     return
   end
