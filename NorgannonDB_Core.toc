@@ -20,6 +20,7 @@ client.lua
 registry.lua
 db.lua
 player.lua
+questie_serializer.lua
 comms.lua
 ui\theme.lua
 ui\widgets.lua
