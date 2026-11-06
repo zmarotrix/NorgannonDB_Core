@@ -2,7 +2,7 @@
 ## Title: |cffe7c66cNorgannonDB|r Core
 ## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Archivum): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.15.0
+## Version: 1.16.0
 ## X-Core-API: 1.15
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB
@@ -20,6 +20,7 @@ client.lua
 registry.lua
 db.lua
 player.lua
+bags.lua
 questie_serializer.lua
 comms.lua
 ui\theme.lua

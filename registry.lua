@@ -9,6 +9,7 @@ Core.SUITE = {
   { key = "clairvoyance", name = "Clairvoyance", folder = "Clairvoyance", accent = "4fe3cf", role = "Quest helper", slash = "/clair" },
   { key = "oracle", name = "Oracle", folder = "Oracle", accent = "b48cff", role = "Dungeon & zone atlas", slash = "/oracle" },
   { key = "retrospect", name = "Retrospect", folder = "Retrospect", accent = "ffb35c", role = "Your characters, account-wide", slash = "/retro" },
+  { key = "providence", name = "Providence", folder = "Providence", accent = "f08a9d", role = "Your bags, looked after", slash = "/prov" },
   { key = "archivum", name = "Archivum", folder = "Archivum", accent = "7cc4ff", role = "Database browser", slash = "/arch" },
 }
 Core.FAMILY = {
