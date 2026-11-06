@@ -16,7 +16,7 @@ Core.Perf = Perf
 local BUDGET_AVG, BUDGET_FRAME = 1, 16           -- ms
 local DEFAULT_SECONDS = 60
 local REPORT_LINES = 8                           -- the heaviest functions a report prints
-local SUITE_FOLDERS = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Retrospect", "Providence" }
+local SUITE_FOLDERS = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Retrospect", "Dimension" }
 
 ---Registers a function to time while measuring: tbl[method], shown as label (grouped by addon).
 function Core:RegisterPerf(label, tbl, method, addon)
