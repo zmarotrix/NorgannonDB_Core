@@ -9,7 +9,6 @@ local C = UI.C
 local STATE_TEXT = {
   loaded = { text = "Running", color = C.easy },
   installed = { text = "Installed, not loaded", color = C.fair },
-  missing = { text = "Not installed", color = C.faint },
 }
 
 -- one line of the suite list: mark, name, role and (on refresh) its state
@@ -31,12 +30,24 @@ local function suiteRow(page, info)
   return row
 end
 
-local function refreshRow(row)
-  local state = Core:AddonState(row.key)
-  local look = STATE_TEXT[state]
-  local version = state ~= "missing" and Core:AddonVersion(row.key)
-  row.state:SetText(UI.Code(look.color) .. look.text .. "|r" .. (version and (UI.Code(C.faint) .. "  v" .. version .. "|r") or ""))
-  row:SetAlpha(state == "missing" and .6 or 1)
+-- Lists only what is on this computer: missing addons get no row, and the rest close up.
+local function refreshRows(page)
+  local previous = page.suiteHead
+  for _, row in ipairs(page.rows) do
+    local state = Core:AddonState(row.key)
+    row:SetShown(state ~= "missing")
+    if state ~= "missing" then
+      local look = STATE_TEXT[state]
+      local version = Core:AddonVersion(row.key)
+      row.state:SetText(UI.Code(look.color) .. look.text .. "|r" .. (version and (UI.Code(C.faint) .. "  v" .. version .. "|r") or ""))
+      row:ClearAllPoints()
+      row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, previous == page.suiteHead and -8 or -4)
+      previous = row
+    end
+  end
+  page.suiteHead:SetShown(previous ~= page.suiteHead)
+  page.creditsHead:ClearAllPoints()
+  page.creditsHead:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -18)
 end
 
 local function buildPage()
@@ -57,22 +68,19 @@ local function buildPage()
   local suiteHead = UI.Text(page, "title", 16, C.goldSoft)
   suiteHead:SetPoint("TOPLEFT", page.dbLine, "BOTTOMLEFT", 0, -18)
   suiteHead:SetText("The suite")
+  page.suiteHead = suiteHead
 
   page.rows = {}
-  local previous = suiteHead
   local list = {}
   for _, info in ipairs(Core.SUITE) do table.insert(list, info) end
   table.insert(list, Core:GetAddonInfo("collector"))   -- NorgannonDB itself is the page's header
   for _, info in ipairs(list) do
-    local row = suiteRow(page, info)
-    row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, previous == suiteHead and -8 or -4)
-    table.insert(page.rows, row)
-    previous = row
+    table.insert(page.rows, suiteRow(page, info))
   end
 
   local creditsHead = UI.Text(page, "title", 16, C.goldSoft)
-  creditsHead:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -18)
   creditsHead:SetText("Credits")
+  page.creditsHead = creditsHead
   local credits = UI.Text(page, "body", 13, C.text)
   credits:SetPoint("TOPLEFT", creditsHead, "BOTTOMLEFT", 0, -6)
   credits:SetWidth(560)
@@ -100,7 +108,7 @@ local function buildPage()
     self.dbLine:SetText(string.format("Core %s  ·  data %s (%s)  ·  %s quests, %s NPCs, %s objects, %s items",
       Core:Version(), info and info.generated or "?", info and info.build or "?", stats.quests or "?",
       stats.npcs or "?", stats.objects or "?", stats.items or "?"))
-    for _, row in ipairs(self.rows) do refreshRow(row) end
+    refreshRows(self)
     self.debug:SetOn(Core.db and Core.db.debug, true)
   end
   page:SetScript("OnShow", page.OnRefresh)
