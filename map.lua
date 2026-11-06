@@ -1,7 +1,8 @@
 -- The shared map layer: suite addons submit pins, the Core draws them once on the world map
 -- and the minimap. Four addons never stack four pin layers, and every pin follows the same
 -- rules: constant on-screen size while the map zooms, draw order by layer, a soft glow over a
--- quest's dense spawns while you hover it, and no centre reported to the gamepad map cursor (which would taint it).
+-- quest's dense spawns while you hover it, and no centre reported to the gamepad map cursor
+-- (which would taint it).
 --
 --   Core.Map:SetPins("clairvoyance", {
 --     { area = 14, x = 52.1, y = 43.0, icon = "pin", color = {1, .82, 0}, layer = 3,
@@ -24,8 +25,16 @@ Core.Map = Map
 local WORLD_LEVEL = 2015          -- Blizzard's map pins start around 2000; stay above them
 local CLUSTER_DISTANCE = 7        -- percent of the map: pins this close join one cluster
 local CLUSTER_AREA_MIN = 6        -- a cluster this big gets a soft glow, shown while its quest is hovered
+local CLUSTER_GLOW_MARGIN = 3     -- percent of the map: how far a glow reaches past its outermost pins
+local CLUSTER_GLOW_ALPHA = .4     -- shown only on hover, so it can be fairly strong
+local GRID_STRIDE = 1024          -- packs a grid cell's column and row into one key
 local MINIMAP_MAX = 150           -- most pins drawn on the minimap, nearest first
-local THROTTLE = 0.05
+local MINIMAP_EDGE_MARGIN = 6     -- pixels: a pin closer to the edge than this isn't drawn
+local THROTTLE = 0.05             -- seconds between redraw checks
+local DEFAULT_PIN_SIZE = 7
+local HOVER_GROW = 1.25           -- a hovered pin's size
+local OVERLAP_REACH = .9          -- of a pin's size: closer than this, two pins with one overlapKey "stack"
+local CONTINENT_DOT, CONTINENT_ICON = 9, 14   -- marker sizes on continent maps: a plain pin, anything else
 
 -- Pin icons. Quest givers use the game's own marks so they read like the default UI: the
 -- client's atlas first, the classic gossip icon second, our own glyph only as a last resort.
@@ -142,8 +151,14 @@ end
 Map.SetIcon = setIcon
 
 local function maps() return NorgannonDB and NorgannonDB.maps end
-function Map.AreaToUiMap(area) local m = maps() return area and m and m.areaToUiMap[area] end
-function Map.UiMapToArea(uiMap) local m = maps() return uiMap and m and m.uiMapToArea[uiMap] end
+function Map.AreaToUiMap(area)
+  local m = maps()
+  return area and m and m.areaToUiMap[area]
+end
+function Map.UiMapToArea(uiMap)
+  local m = maps()
+  return uiMap and m and m.uiMapToArea[uiMap]
+end
 
 -- Blizzard's gamepad map cursor reads pin centres outside secure code; a frame that reports no
 -- centre is skipped, which keeps our pins from tainting the gamepad map UI.
@@ -210,6 +225,72 @@ Map.WorldOf = worldOf
 -- stays linear in the number of pins
 -------------------------------------------------------------------------------------------
 
+-- A group's pins as sets linked by steps of at most CLUSTER_DISTANCE (a union-find). Each pin
+-- only compares with those in its own and the neighbouring grid cells.
+local function linkedSets(group)
+  local parent, grid = {}, {}
+  local function find(i)
+    while parent[i] ~= i do
+      parent[i] = parent[parent[i]]
+      i = parent[i]
+    end
+    return i
+  end
+  local d2 = CLUSTER_DISTANCE * CLUSTER_DISTANCE
+  for i, pin in ipairs(group) do
+    parent[i] = i
+    local ri = i   -- the root of i's set, kept current so each pair needs one find
+    local px, py = pin.x, pin.y
+    local cx, cy = math.floor(px / CLUSTER_DISTANCE), math.floor(py / CLUSTER_DISTANCE)
+    for gx = cx - 1, cx + 1 do
+      for gy = cy - 1, cy + 1 do
+        local cell = grid[gx * GRID_STRIDE + gy]
+        if cell then
+          for n = 1, #cell do
+            local j = cell[n]
+            local o = group[j]
+            local dx, dy = px - o.x, py - o.y
+            if dx * dx + dy * dy <= d2 then
+              local rj = find(j)
+              if ri ~= rj then
+                parent[ri] = rj
+                ri = rj
+              end
+            end
+          end
+        end
+      end
+    end
+    local key = cx * GRID_STRIDE + cy
+    local cell = grid[key]
+    if not cell then
+      cell = {}
+      grid[key] = cell
+    end
+    cell[#cell + 1] = i
+  end
+  local sets = {}
+  for i in ipairs(group) do
+    local root = find(i)
+    sets[root] = sets[root] or {}
+    table.insert(sets[root], group[i])
+  end
+  return sets
+end
+
+-- the glow's ellipse around a set of pins
+local function clusterOf(members)
+  local sx, sy = 0, 0
+  for _, p in ipairs(members) do sx, sy = sx + p.x, sy + p.y end
+  local mx, my = sx / #members, sy / #members
+  local rx, ry = 0, 0
+  for _, p in ipairs(members) do
+    rx, ry = math.max(rx, math.abs(p.x - mx)), math.max(ry, math.abs(p.y - my))
+  end
+  return { x = mx, y = my, rx = rx + CLUSTER_GLOW_MARGIN, ry = ry + CLUSTER_GLOW_MARGIN, members = members,
+    color = members[1].color }
+end
+
 local function clusterPins(pins)
   local groups = {}
   for _, pin in ipairs(pins) do
@@ -219,64 +300,10 @@ local function clusterPins(pins)
     end
   end
   local clusters = {}
-  local d2 = CLUSTER_DISTANCE * CLUSTER_DISTANCE
   for _, group in pairs(groups) do
     if #group >= CLUSTER_AREA_MIN then
-      local parent, grid = {}, {}
-      local function find(i)
-        while parent[i] ~= i do parent[i] = parent[parent[i]] i = parent[i] end
-        return i
-      end
-      for i, pin in ipairs(group) do
-        parent[i] = i
-        local ri = i   -- the root of i's set, kept current so each pair needs one find
-        local px, py = pin.x, pin.y
-        local cx, cy = math.floor(px / CLUSTER_DISTANCE), math.floor(py / CLUSTER_DISTANCE)
-        for gx = cx - 1, cx + 1 do
-          for gy = cy - 1, cy + 1 do
-            local cell = grid[gx * 1024 + gy]
-            if cell then
-              for n = 1, #cell do
-                local j = cell[n]
-                local o = group[j]
-                local dx, dy = px - o.x, py - o.y
-                if dx * dx + dy * dy <= d2 then
-                  local rj = find(j)
-                  if ri ~= rj then
-                    parent[ri] = rj
-                    ri = rj
-                  end
-                end
-              end
-            end
-          end
-        end
-        local key = cx * 1024 + cy
-        local cell = grid[key]
-        if not cell then
-          cell = {}
-          grid[key] = cell
-        end
-        cell[#cell + 1] = i
-      end
-      local sets = {}
-      for i in ipairs(group) do
-        local root = find(i)
-        sets[root] = sets[root] or {}
-        table.insert(sets[root], group[i])
-      end
-      for _, members in pairs(sets) do
-        if #members >= CLUSTER_AREA_MIN then
-          local sx, sy = 0, 0
-          for _, p in ipairs(members) do sx, sy = sx + p.x, sy + p.y end
-          local mx, my = sx / #members, sy / #members
-          local rx, ry = 0, 0
-          for _, p in ipairs(members) do
-            rx, ry = math.max(rx, math.abs(p.x - mx)), math.max(ry, math.abs(p.y - my))
-          end
-          table.insert(clusters, { x = mx, y = my, rx = rx + 3, ry = ry + 3, members = members,
-            color = members[1].color })
-        end
+      for _, members in pairs(linkedSets(group)) do
+        if #members >= CLUSTER_AREA_MIN then table.insert(clusters, clusterOf(members)) end
       end
     end
   end
@@ -298,6 +325,12 @@ local DIM = .3    -- opacity of everything outside the highlighted group
 Map.DIM = DIM
 local applyHighlight   -- defined after the frame pools
 
+-- a pin frame's opacity: its own, dimmed when another group is highlighted
+local function highlightedAlpha(baseAlpha, pin)
+  local key = Map.highlight
+  return baseAlpha * ((key and highlightKey(pin) ~= key) and DIM or 1)
+end
+
 ---Highlights one group (dims the others on the world map, minimap and compass); nil clears.
 function Map:SetHighlight(key)
   if self.highlight == key then return end
@@ -315,7 +348,7 @@ Map.PinColor = pinColor
 local function pinEnter(self)
   local pin = self.pin
   if not pin then return end
-  self.icon:SetSize(self.size * 1.25, self.size * 1.25)
+  self.icon:SetSize(self.size * HOVER_GROW, self.size * HOVER_GROW)
   Map:SetHighlight(highlightKey(pin))
   GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
   if pin.tooltip then
@@ -323,13 +356,12 @@ local function pinEnter(self)
   elseif pin.title then
     GameTooltip:AddLine(pin.title, 1, 1, 1)
   end
+  local faint = UI.C.faint
   if (pin.quest or pin.colorKey) and not pin.onClick then
-    local f = UI.C.faint
-    GameTooltip:AddLine("Click: new colour  ·  Right-click: choose colour", f[1], f[2], f[3])
+    GameTooltip:AddLine("Click: new colour  ·  Right-click: choose colour", faint[1], faint[2], faint[3])
   end
   if pin.shiftHint then
-    local f = UI.C.faint
-    GameTooltip:AddLine(pin.shiftHint, f[1], f[2], f[3])
+    GameTooltip:AddLine(pin.shiftHint, faint[1], faint[2], faint[3])
   end
   GameTooltip:Show()
 end
@@ -365,16 +397,20 @@ local function newPin(parent)
   return f
 end
 
+-- gives a pooled pin frame this pin's look and behaviour
 local function dress(f, pin, size, alpha)
   local tintable = setIcon(f.icon, pin.icon)
   local c = pinColor(pin)
-  if c and tintable then f.icon:SetVertexColor(c[1], c[2], c[3]) else f.icon:SetVertexColor(1, 1, 1) end
+  if c and tintable then
+    f.icon:SetVertexColor(c[1], c[2], c[3])
+  else
+    f.icon:SetVertexColor(1, 1, 1)
+  end
   f.size = size
   f:SetSize(size, size)
   f.icon:SetSize(size, size)
   f.baseAlpha = alpha or 1
-  local key = Map.highlight
-  f:SetAlpha(f.baseAlpha * ((key and highlightKey(pin) ~= key) and DIM or 1))
+  f:SetAlpha(highlightedAlpha(f.baseAlpha, pin))
   f.pin = pin
   f:EnableMouse(pin.title ~= nil or pin.tooltip ~= nil or pin.onClick ~= nil or pin.quest ~= nil or pin.onShiftClick ~= nil)
 end
@@ -448,7 +484,7 @@ local function continentMarkers(uiMap)
       local pin, n, zoneMap = g.pin, g.n, g.zoneMap
       markers[#markers + 1] = {
         x = x * 100, y = y * 100, icon = pin.icon, quest = pin.quest, color = pin.color, colorKey = pin.colorKey,
-        layer = pin.layer, size = (pin.icon == "pin" or pin.icon == nil) and 9 or 14, title = pin.title,
+        layer = pin.layer, size = (pin.icon == "pin" or pin.icon == nil) and CONTINENT_DOT or CONTINENT_ICON, title = pin.title,
         tooltip = function(_, tt)
           if pin.tooltip then Core.SafeCall(pin.tooltip, pin, tt) else tt:AddLine(pin.title or "?", 1, 1, 1) end
           local info = C_Map.GetMapInfo(zoneMap)
@@ -463,17 +499,88 @@ local function continentMarkers(uiMap)
 end
 Map.ContinentMarkers = continentMarkers
 
+-- Pins sharing an overlapKey (the same quest's "!" or "?") don't stack: one is skipped when
+-- another of its key is already drawn within reach. Measured in screen pixels, so zooming in
+-- separates spawns that are really apart. drawn = { [key] = { {x, y}, ... } } for this pass;
+-- a pin that isn't skipped is added to it.
+local function overlapsDrawn(drawn, key, x, y, reach)
+  local list = drawn[key]
+  if list then
+    for _, p in ipairs(list) do
+      local dx, dy = p[1] - x, p[2] - y
+      if dx * dx + dy * dy < reach * reach then return true end
+    end
+  else
+    list = {}
+    drawn[key] = list
+  end
+  list[#list + 1] = { x, y }
+  return false
+end
+
 local function isZoneMap(uiMap)
   local info = C_Map.GetMapInfo(uiMap)
   return not (info and info.mapType and Enum and Enum.UIMapType and info.mapType < Enum.UIMapType.Zone)
 end
 
+-- draws the glows (each hidden until its group is highlighted); returns how many there are
+local function drawClusterGlows(clusters)
+  local count = 0
+  for _, cluster in ipairs(clusters) do
+    count = count + 1
+    local f = areaFrame(count)
+    local c = cluster.color or pinColor(cluster.members[1]) or UI.C.goldSoft
+    f.glow:SetVertexColor(c[1], c[2], c[3], CLUSTER_GLOW_ALPHA)
+    f.key = highlightKey(cluster.members[1])
+    f.active = true
+    f:SetFrameLevel(WORLD_LEVEL + 1)
+    f:ClearAllPoints()
+    f:SetSize(cluster.rx * 2 / 100 * world:GetWidth(), cluster.ry * 2 / 100 * world:GetHeight())
+    f:SetPoint("CENTER", world, "TOPLEFT", cluster.x / 100 * world:GetWidth(), -cluster.y / 100 * world:GetHeight())
+    -- the glow only shows a quest's spread while one of its pins is hovered
+    f:SetShown(Map.highlight ~= nil and f.key == Map.highlight)
+  end
+  for i = count + 1, #areaFrames do
+    areaFrames[i]:Hide()
+    areaFrames[i].active = nil
+  end
+  return count
+end
+
+-- draws the world pins; returns how many were drawn and how many were skipped as overlapping
+local function drawWorldPins(pins)
+  local drawn = {}
+  local w, h = world:GetWidth(), world:GetHeight()
+  local count, overlapped = 0, 0
+  for _, pin in ipairs(pins) do
+    if pin.world ~= false then
+      local key = pin.overlapKey
+      if key and overlapsDrawn(drawn, key, pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale,
+          (pin.size or DEFAULT_PIN_SIZE) * OVERLAP_REACH) then
+        overlapped = overlapped + 1
+      else
+        count = count + 1
+        local f = worldPins[count] or newPin(world)
+        worldPins[count] = f
+        dress(f, pin, pin.size or DEFAULT_PIN_SIZE, pin.alpha)
+        f:SetFrameLevel(WORLD_LEVEL + 2 + (pin.layer or 1))
+        place(f, pin.x, pin.y)
+        f:Show()
+      end
+    end
+  end
+  for i = count + 1, #worldPins do
+    worldPins[i]:Hide()
+    worldPins[i].pin = nil
+  end
+  return count, overlapped
+end
+
 function Map:RefreshWorld()
   worldDirty = false
-  local n, a = 0, 0
   local uiMap = WorldMapFrame:IsShown() and WorldMapFrame:GetMapID()
   if uiMap ~= shownMap then
-    -- one announcement per change, so add-ons needn't poll the map
+    -- one announcement per change, so add-ons needn't poll the map (uiMap is false when closed)
     local mapArea = uiMap and Map.UiMapToArea(uiMap)
     C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_CHANGED", uiMap or nil, mapArea) end)
   end
@@ -484,63 +591,9 @@ function Map:RefreshWorld()
   local continent = uiMap and not isZoneMap(uiMap)
   if continent then pins = continentMarkers(uiMap) end
 
-  local clusters = continent and {} or clusterPins(pins)
-  for _, cluster in ipairs(clusters) do
-    a = a + 1
-    local f = areaFrame(a)
-    local c = cluster.color or pinColor(cluster.members[1]) or UI.C.goldSoft
-    f.glow:SetVertexColor(c[1], c[2], c[3], .4)   -- shown only on hover, so it can be fairly strong
-    f.key = highlightKey(cluster.members[1])
-    f.active = true
-    f:SetFrameLevel(WORLD_LEVEL + 1)
-    f:ClearAllPoints()
-    f:SetSize(cluster.rx * 2 / 100 * world:GetWidth(), cluster.ry * 2 / 100 * world:GetHeight())
-    f:SetPoint("CENTER", world, "TOPLEFT", cluster.x / 100 * world:GetWidth(), -cluster.y / 100 * world:GetHeight())
-    -- the glow only shows a quest's spread while one of its pins is hovered
-    f:SetShown(Map.highlight ~= nil and f.key == Map.highlight)
-  end
-  for i = a + 1, #areaFrames do areaFrames[i]:Hide() areaFrames[i].active = nil end
-
-  -- pins sharing an overlapKey (the same quest's "!" or "?") don't stack: one is skipped when
-  -- another of its key is already drawn within its own size on screen. Measured in screen
-  -- pixels, so zooming in separates spawns that are really apart.
-  local drawn = {}
-  local w, h = world:GetWidth(), world:GetHeight()
-  local function overlaps(pin)
-    local key = pin.overlapKey
-    if not key then return false end
-    local sx, sy = pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale
-    local reach = (pin.size or 7) * .9
-    local list = drawn[key]
-    if list then
-      for _, p in ipairs(list) do
-        local dx, dy = p[1] - sx, p[2] - sy
-        if dx * dx + dy * dy < reach * reach then return true end
-      end
-    else
-      list = {}
-      drawn[key] = list
-    end
-    list[#list + 1] = { sx, sy }
-    return false
-  end
-  Map.stats.overlapped = 0
-
-  for _, pin in ipairs(pins) do
-    if pin.world ~= false and overlaps(pin) then
-      Map.stats.overlapped = Map.stats.overlapped + 1
-    elseif pin.world ~= false then
-      n = n + 1
-      local f = worldPins[n] or newPin(world)
-      worldPins[n] = f
-      dress(f, pin, pin.size or 7, pin.alpha)
-      f:SetFrameLevel(WORLD_LEVEL + 2 + (pin.layer or 1))
-      place(f, pin.x, pin.y)
-      f:Show()
-    end
-  end
-  for i = n + 1, #worldPins do worldPins[i]:Hide() worldPins[i].pin = nil end
-  Map.stats.world, Map.stats.clusters = n, a
+  local glows = drawClusterGlows(continent and {} or clusterPins(pins))
+  local drawn, overlapped = drawWorldPins(pins)
+  Map.stats.world, Map.stats.clusters, Map.stats.overlapped = drawn, glows, overlapped
 end
 
 local function rescaleWorld()
@@ -569,7 +622,7 @@ local SHAPES = {
 }
 
 local miniPins = {}
-local mm = {}
+local view = {}   -- the player and the minimap for this refresh; filled by prepareMinimap
 
 local function prepareMinimap()
   local px, py, instance = HBD:GetPlayerWorldPosition()
@@ -577,12 +630,12 @@ local function prepareMinimap()
   local rotate = GetCVar("rotateMinimap") == "1"
   local facing = rotate and GetPlayerFacing() or 0
   if rotate and (not facing or Core.IsSecret(facing)) then return false end
-  mm.x, mm.y, mm.instance = px, py, instance
-  mm.rotate, mm.sin, mm.cos = rotate, math.sin(facing), math.cos(facing)
-  mm.radius = (C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius())
+  view.x, view.y, view.instance = px, py, instance
+  view.rotate, view.sin, view.cos = rotate, math.sin(facing), math.cos(facing)
+  view.radius = (C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius())
     or (Minimap.GetViewRadius and Minimap:GetViewRadius()) or 150
-  mm.halfw, mm.halfh = Minimap:GetWidth() / 2, Minimap:GetHeight() / 2
-  mm.shape = GetMinimapShape and SHAPES[GetMinimapShape() or "ROUND"]
+  view.halfw, view.halfh = Minimap:GetWidth() / 2, Minimap:GetHeight() / 2
+  view.shape = GetMinimapShape and SHAPES[GetMinimapShape() or "ROUND"]   -- no entry for plain round
   return true
 end
 
@@ -592,22 +645,22 @@ end
 ---so your facing points up (facing counts counter-clockwise from north).
 local function minimapOffset(pin, margin)
   local wx, wy, instance = worldOf(pin)
-  if not wx or instance ~= mm.instance then return end
-  local east, north = mm.x - wx, wy - mm.y
-  if mm.rotate then east, north = east * mm.cos + north * mm.sin, north * mm.cos - east * mm.sin end
-  local x, y = east / mm.radius * mm.halfw, north / mm.radius * mm.halfh
+  if not wx or instance ~= view.instance then return end
+  local east, north = view.x - wx, wy - view.y
+  if view.rotate then east, north = east * view.cos + north * view.sin, north * view.cos - east * view.sin end
+  local x, y = east / view.radius * view.halfw, north / view.radius * view.halfh
   local distance = math.sqrt(x * x + y * y)
   local round = true
-  if mm.shape and x ~= 0 and y ~= 0 then
+  if view.shape and x ~= 0 and y ~= 0 then
     -- quadrants: { upper-left, lower-left, upper-right, lower-right }
     local q = x < 0 and 1 or 3
-    round = y > 0 and mm.shape[q] or mm.shape[q + 1]
+    round = y > 0 and view.shape[q] or view.shape[q + 1]
   end
   local inside
   if round then
-    inside = distance + margin < mm.halfw
+    inside = distance + margin < view.halfw
   else
-    inside = math.abs(x) + margin < mm.halfw and math.abs(y) + margin < mm.halfh
+    inside = math.abs(x) + margin < view.halfw and math.abs(y) + margin < view.halfh
   end
   return x, y, distance, inside
 end
@@ -620,7 +673,7 @@ function Map:RefreshMinimap()
     for _, pins in pairs(byArea) do
       for _, pin in ipairs(pins) do
         if pin.minimap ~= false then
-          local x, y, distance, inside = minimapOffset(pin, 6)
+          local x, y, distance, inside = minimapOffset(pin, MINIMAP_EDGE_MARGIN)
           if inside then visible[#visible + 1] = { pin = pin, x = x, y = y, d = distance } end
         end
       end
@@ -631,29 +684,24 @@ function Map:RefreshMinimap()
     end
     local drawn = {}   -- the same overlapKey rule as the world map, in minimap pixels
     for _, v in ipairs(visible) do
-      local key, skip = v.pin.overlapKey, false
-      if key then
-        local reach = (v.pin.minimapSize or 7) * .9
-        drawn[key] = drawn[key] or {}
-        for _, p in ipairs(drawn[key]) do
-          local dx, dy = p[1] - v.x, p[2] - v.y
-          if dx * dx + dy * dy < reach * reach then skip = true break end
-        end
-        if not skip then table.insert(drawn[key], { v.x, v.y }) end
-      end
-      if not skip then
-      n = n + 1
-      local f = miniPins[n] or newPin(Minimap)
-      miniPins[n] = f
-      dress(f, v.pin, v.pin.minimapSize or 7, v.pin.alpha)
-      f:SetFrameLevel(Minimap:GetFrameLevel() + 5 + (v.pin.layer or 1))
-      f:ClearAllPoints()
-      f:SetPoint("CENTER", Minimap, "CENTER", v.x, v.y)
-      f:Show()
+      local key = v.pin.overlapKey
+      local size = v.pin.minimapSize or DEFAULT_PIN_SIZE
+      if not (key and overlapsDrawn(drawn, key, v.x, v.y, size * OVERLAP_REACH)) then
+        n = n + 1
+        local f = miniPins[n] or newPin(Minimap)
+        miniPins[n] = f
+        dress(f, v.pin, size, v.pin.alpha)
+        f:SetFrameLevel(Minimap:GetFrameLevel() + 5 + (v.pin.layer or 1))
+        f:ClearAllPoints()
+        f:SetPoint("CENTER", Minimap, "CENTER", v.x, v.y)
+        f:Show()
       end
     end
   end
-  for i = n + 1, #miniPins do miniPins[i]:Hide() miniPins[i].pin = nil end
+  for i = n + 1, #miniPins do
+    miniPins[i]:Hide()
+    miniPins[i].pin = nil
+  end
   Map.stats.minimap = n
 end
 
@@ -664,9 +712,7 @@ end
 applyHighlight = function()
   local key = Map.highlight
   local function fade(f)
-    if f:IsShown() and f.pin then
-      f:SetAlpha((f.baseAlpha or 1) * ((key and highlightKey(f.pin) ~= key) and DIM or 1))
-    end
+    if f:IsShown() and f.pin then f:SetAlpha(highlightedAlpha(f.baseAlpha or 1, f.pin)) end
   end
   for _, f in ipairs(worldPins) do fade(f) end
   for _, f in ipairs(miniPins) do fade(f) end
@@ -678,30 +724,6 @@ end
 
 -- a quest's new colour: redraw (the minimap redraws every tick anyway)
 Core:Listen("NORGANNON_QUEST_COLOR_CHANGED", "map", function() worldDirty = true end)
-
--------------------------------------------------------------------------------------------
--- Driver: redraw the world map when it opens, changes map or gets new pins; rescale on
--- zoom; the minimap follows the player every THROTTLE seconds
--------------------------------------------------------------------------------------------
-
-local driver = CreateFrame("Frame")
-local elapsed = 0
-driver:SetScript("OnUpdate", function(_, dt)
-  if Map.pulse then Map.ApplyPulse() end   -- defined below the driver
-  elapsed = elapsed + dt
-  if elapsed < THROTTLE then return end
-  elapsed = 0
-  if WorldMapFrame:IsShown() then
-    if worldDirty or WorldMapFrame:GetMapID() ~= shownMap then
-      Map:RefreshWorld()
-    else
-      rescaleWorld()
-    end
-  elseif shownMap then
-    Map:RefreshWorld()   -- hides everything once the map is closed
-  end
-  Map:RefreshMinimap()
-end)
 
 -------------------------------------------------------------------------------------------
 -- Pulse: "show me" - a group's pins grow and shrink for a moment so the eye finds them
@@ -734,7 +756,30 @@ local function applyPulse()
     if Map.highlight == p.key then Map:SetHighlight(nil) end
   end
 end
-Map.ApplyPulse = applyPulse
+
+-------------------------------------------------------------------------------------------
+-- Driver: redraw the world map when it opens, changes map or gets new pins; rescale on
+-- zoom; the minimap follows the player every THROTTLE seconds
+-------------------------------------------------------------------------------------------
+
+local driver = CreateFrame("Frame")
+local elapsed = 0
+driver:SetScript("OnUpdate", function(_, dt)
+  if Map.pulse then applyPulse() end
+  elapsed = elapsed + dt
+  if elapsed < THROTTLE then return end
+  elapsed = 0
+  if WorldMapFrame:IsShown() then
+    if worldDirty or WorldMapFrame:GetMapID() ~= shownMap then
+      Map:RefreshWorld()
+    else
+      rescaleWorld()
+    end
+  elseif shownMap then
+    Map:RefreshWorld()   -- hides everything once the map is closed
+  end
+  Map:RefreshMinimap()
+end)
 
 ---Draws everything now (normally the driver does it within THROTTLE seconds).
 function Map:Refresh()
