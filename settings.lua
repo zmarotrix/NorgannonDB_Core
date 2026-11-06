@@ -7,10 +7,37 @@ local UI = Core.UI
 local C = UI.C
 
 local STATE_TEXT = {
-  loaded = { "Running", C.easy },
-  installed = { "Installed, not loaded", C.fair },
-  missing = { "Not installed", C.faint },
+  loaded = { text = "Running", color = C.easy },
+  installed = { text = "Installed, not loaded", color = C.fair },
+  missing = { text = "Not installed", color = C.faint },
 }
+
+-- one line of the suite list: mark, name, role and (on refresh) its state
+local function suiteRow(page, info)
+  local row = CreateFrame("Frame", nil, page)
+  row:SetSize(560, 40)
+  row.mark = UI.Mark(row, info.key, 32)
+  row.mark:SetPoint("LEFT")
+  row.name = UI.Text(row, "title", 16, UI.Hex(info.accent))
+  row.name:SetPoint("TOPLEFT", row.mark, "TOPRIGHT", 10, -1)
+  row.name:SetText(info.kicker and (info.kicker .. " " .. info.name) or info.name)
+  row.role = UI.Text(row, "body", 13, C.muted)
+  row.role:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
+  row.role:SetText(info.role .. (info.slash and ("  " .. UI.Code(C.faint) .. info.slash .. "|r") or ""))
+  row.state = UI.Text(row, "body", 13)
+  row.state:SetPoint("RIGHT", 0, 0)
+  row.state:SetJustifyH("RIGHT")
+  row.key = info.key
+  return row
+end
+
+local function refreshRow(row)
+  local state = Core:AddonState(row.key)
+  local look = STATE_TEXT[state]
+  local version = state ~= "missing" and Core:AddonVersion(row.key)
+  row.state:SetText(UI.Code(look.color) .. look.text .. "|r" .. (version and (UI.Code(C.faint) .. "  v" .. version .. "|r") or ""))
+  row:SetAlpha(state == "missing" and .6 or 1)
+end
 
 local function buildPage()
   local page = CreateFrame("Frame")
@@ -35,24 +62,10 @@ local function buildPage()
   local previous = suiteHead
   local list = {}
   for _, info in ipairs(Core.SUITE) do table.insert(list, info) end
-  table.insert(list, Core.FAMILY[2])   -- the collector (NorgannonDB itself is the header)
+  table.insert(list, Core:GetAddonInfo("collector"))   -- NorgannonDB itself is the page's header
   for _, info in ipairs(list) do
-    local row = CreateFrame("Frame", nil, page)
-    row:SetSize(560, 40)
+    local row = suiteRow(page, info)
     row:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, previous == suiteHead and -8 or -4)
-    row.mark = UI.Mark(row, info.key, 32)
-    row.mark:SetPoint("LEFT")
-    local accent = UI.Hex(info.accent)
-    row.name = UI.Text(row, "title", 16, accent)
-    row.name:SetPoint("TOPLEFT", row.mark, "TOPRIGHT", 10, -1)
-    row.name:SetText(info.kicker and (info.kicker .. " " .. info.name) or info.name)
-    row.role = UI.Text(row, "body", 13, C.muted)
-    row.role:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -2)
-    row.role:SetText(info.role .. (info.slash and ("  " .. UI.Code(C.faint) .. info.slash .. "|r") or ""))
-    row.state = UI.Text(row, "body", 13)
-    row.state:SetPoint("RIGHT", 0, 0)
-    row.state:SetJustifyH("RIGHT")
-    row.key = info.key
     table.insert(page.rows, row)
     previous = row
   end
@@ -76,7 +89,9 @@ local function buildPage()
   local debugLabel = UI.Text(page, "body", 13, C.muted)
   debugLabel:SetPoint("LEFT", gallery, "RIGHT", 20, 0)
   debugLabel:SetText("Debug log")
-  page.debug = UI.Toggle(page, function(on) if Core.db then Core.db.debug = on end end)
+  page.debug = UI.Toggle(page, function(on)
+    if Core.db then Core.db.debug = on end
+  end)
   page.debug:SetPoint("LEFT", debugLabel, "RIGHT", 8, 0)
 
   function page:OnRefresh()
@@ -85,13 +100,7 @@ local function buildPage()
     self.dbLine:SetText(string.format("Core %s  ·  data %s (%s)  ·  %s quests, %s NPCs, %s objects, %s items",
       Core:Version(), info and info.generated or "?", info and info.build or "?", stats.quests or "?",
       stats.npcs or "?", stats.objects or "?", stats.items or "?"))
-    for _, row in ipairs(self.rows) do
-      local state = Core:AddonState(row.key)
-      local text, c = STATE_TEXT[state][1], STATE_TEXT[state][2]
-      local version = state ~= "missing" and Core:AddonVersion(row.key)
-      row.state:SetText(UI.Code(c) .. text .. "|r" .. (version and (UI.Code(C.faint) .. "  v" .. version .. "|r") or ""))
-      row:SetAlpha(state == "missing" and .6 or 1)
-    end
+    for _, row in ipairs(self.rows) do refreshRow(row) end
     self.debug:SetOn(Core.db and Core.db.debug, true)
   end
   page:SetScript("OnShow", page.OnRefresh)
