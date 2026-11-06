@@ -5,7 +5,7 @@
 --   for _, r in ipairs(results) do print(r.kind, r.name, #r.ids) end
 
 local Core = NorgannonCore
-local DBX = {}
+local DBX = {}   -- Core.DB. "DB" in this file is NorgannonDB, the data itself
 Core.DB = DBX
 
 local KINDS = { "quests", "npcs", "objects", "items" }
@@ -129,6 +129,7 @@ local SINGULAR = { quests = "quest", npcs = "npc", objects = "object", items = "
 DBX.SINGULAR = SINGULAR
 
 -- match class: 0 exact, 1 prefix, 2 word prefix, 3 anywhere
+local MATCH_CLASSES = 4
 local function classify(lower, needle)
   local at = string.find(lower, needle, 1, true)
   if not at then return nil end
@@ -138,35 +139,29 @@ local function classify(lower, needle)
   return 3
 end
 
-local last = nil   -- { needle, kindsKey, slots = { [kind] = {slot, ...} } }
+-- A match while ranking is one number, kind * SLOT_RANGE + slot, so a query that matches most of
+-- the database doesn't build a table per match.
+local SLOT_RANGE = 100000
 
----Searches entity names. opts: kinds = { npcs = true, ... } (default all), limit (default 50).
----Returns a ranked list of { kind = "npc", key = "npcs", name, ids = {...}, class }.
----Typing more of the same query only re-checks the previous matches.
-function DBX:Search(text, opts)
-  opts = opts or {}
-  local needle = string.lower(strtrim(text or ""))
-  if needle == "" then return {} end
-  self:EnsureIndex()
-  local limit = opts.limit or 50
+local function matchName(ref)
+  return index[KINDS[math.floor(ref / SLOT_RANGE)]].lower[ref % SLOT_RANGE]
+end
 
-  local kindsKey = ""
-  for _, kind in ipairs(KINDS) do
-    if not opts.kinds or opts.kinds[kind] then kindsKey = kindsKey .. kind end
-  end
-  local refine = last and last.kindsKey == kindsKey and #needle > #last.needle
-    and string.sub(needle, 1, #last.needle) == last.needle
+local function byMatchName(a, b) return matchName(a) < matchName(b) end
 
-  -- Rank without sorting every match: bucket by match class, then by name length (short
-  -- names first), and sort only the buckets the limit reaches. A one-letter query matches
-  -- most of the database, so this keeps it linear.
-  local buckets = { {}, {}, {}, {} }      -- [class + 1][length] = { ref, ... }
+local lastSearch = nil   -- { needle, kindsKey, slots = { [kind] = {slot, ...} } }
+
+-- Finds every match, bucketed by match class and then by name length (short names first).
+-- candidatesOf[kind], when given, narrows the search to those slots.
+local function collectMatches(needle, kinds, candidatesOf)
+  local buckets = {}      -- [class + 1][length] = { ref, ... }
+  for c = 1, MATCH_CLASSES do buckets[c] = {} end
   local slotsByKind, total = {}, 0
   for k, kind in ipairs(KINDS) do
-    if not opts.kinds or opts.kinds[kind] then
+    if not kinds or kinds[kind] then
       local lower = index[kind].lower
       local found = {}
-      local candidates = refine and last.slots[kind]
+      local candidates = candidatesOf and candidatesOf[kind]
       local count = candidates and #candidates or #lower
       for i = 1, count do
         local slot = candidates and candidates[i] or i
@@ -180,19 +175,21 @@ function DBX:Search(text, opts)
             list = {}
             byLength[#name] = list
           end
-          list[#list + 1] = k * 100000 + slot   -- kind and slot in one number
+          list[#list + 1] = k * SLOT_RANGE + slot
           total = total + 1
         end
       end
       slotsByKind[kind] = found
     end
   end
-  last = { needle = needle, kindsKey = kindsKey, slots = slotsByKind }
+  return buckets, slotsByKind, total
+end
 
+-- The first `limit` results in rank order. Only the buckets the limit reaches get sorted: a
+-- one-letter query matches most of the database, so this keeps it linear.
+local function takeRanked(buckets, limit)
   local results = {}
-  local function nameOf(ref) return index[KINDS[math.floor(ref / 100000)]].lower[ref % 100000] end
-  local function byName(a, b) return nameOf(a) < nameOf(b) end
-  for c = 1, 4 do
+  for c = 1, MATCH_CLASSES do
     local byLength = buckets[c]
     local lengths = {}
     for length in pairs(byLength) do lengths[#lengths + 1] = length end
@@ -200,16 +197,38 @@ function DBX:Search(text, opts)
     for _, length in ipairs(lengths) do
       if #results >= limit then break end
       local list = byLength[length]
-      table.sort(list, byName)
+      table.sort(list, byMatchName)
       for _, ref in ipairs(list) do
         if #results >= limit then break end
-        local kind, slot = KINDS[math.floor(ref / 100000)], ref % 100000
+        local kind, slot = KINDS[math.floor(ref / SLOT_RANGE)], ref % SLOT_RANGE
         local slots = index[kind]
         results[#results + 1] = { kind = SINGULAR[kind], key = kind, name = slots.display[slot], ids = slots.ids[slot], class = c - 1 }
       end
     end
   end
-  return results, total
+  return results
+end
+
+---Searches entity names. opts: kinds = { npcs = true, ... } (default all), limit (default 50).
+---Returns a ranked list of { kind = "npc", key = "npcs", name, ids = {...}, class }, and the
+---number of matches before the limit.
+---Typing more of the same query only re-checks the previous matches.
+function DBX:Search(text, opts)
+  opts = opts or {}
+  local needle = string.lower(strtrim(text or ""))
+  if needle == "" then return {} end
+  self:EnsureIndex()
+
+  local kindsKey = ""
+  for _, kind in ipairs(KINDS) do
+    if not opts.kinds or opts.kinds[kind] then kindsKey = kindsKey .. kind end
+  end
+  local refine = lastSearch and lastSearch.kindsKey == kindsKey and #needle > #lastSearch.needle
+    and string.sub(needle, 1, #lastSearch.needle) == lastSearch.needle
+
+  local buckets, slotsByKind, total = collectMatches(needle, opts.kinds, refine and lastSearch.slots)
+  lastSearch = { needle = needle, kindsKey = kindsKey, slots = slotsByKind }
+  return takeRanked(buckets, opts.limit or 50), total
 end
 
 ---Every id of an exact (case-insensitive, localized) name: DB:IdsByName("objects", "Peacebloom").
@@ -287,20 +306,23 @@ end
 ---One instance by key ("deadmines", "sm-cathedral"), or nil.
 function DBX:Instance(key) return instances()[key] end
 
+-- the client's own (localized) name of an area, if it has one
+local function clientAreaName(area)
+  if not (C_Map and C_Map.GetAreaInfo) then return nil end
+  local ok, name = pcall(C_Map.GetAreaInfo, area)
+  if ok and type(name) == "string" and name ~= "" then return name end
+end
+
 ---The instance's name in the client's language: "The Deadmines", "Scarlet Monastery: Cathedral".
 function DBX:InstanceName(key)
   local inst = instances()[key]
   if not inst then return nil end
   local base = inst.name
   if inst.area then
-    local area = inst.area
-    if C_Map and C_Map.GetAreaInfo then
-      local ok, name = pcall(C_Map.GetAreaInfo, area)
-      if ok and type(name) == "string" and name ~= "" then base = name end
-    end
+    base = clientAreaName(inst.area) or base
     if not base then
       local DB = db()
-      base = DB and DB.dungeons and DB.dungeons[area] and DB.dungeons[area].name
+      base = DB and DB.dungeons and DB.dungeons[inst.area] and DB.dungeons[inst.area].name
     end
   end
   base = inst.groupName or base or key
@@ -343,10 +365,11 @@ local function recipes()
   return DB and DB.recipes or {}
 end
 
-local function recipeIndex(name, id)
+-- one of NorgannonDB's recipe indexes ("craftedBy", "reagentOf", ...), at id
+local function recipeIndexed(name, id)
   local DB = db()
-  local index = DB and DB.index and DB.index.recipes
-  return index and index[name] and index[name][id]
+  local indexes = DB and DB.index and DB.index.recipes
+  return indexes and indexes[name] and indexes[name][id]
 end
 
 ---One recipe by spell id, or nil.
@@ -379,21 +402,21 @@ function DBX:Recipes(skill)
 end
 
 ---The recipes that make an item, that use it, and the one a recipe item teaches.
-function DBX:CraftedBy(itemId) return recipeIndex("craftedBy", itemId) or {} end
-function DBX:ReagentOf(itemId) return recipeIndex("reagentOf", itemId) or {} end
-function DBX:RecipeTaughtBy(itemId) return recipeIndex("taughtBy", itemId) end
+function DBX:CraftedBy(itemId) return recipeIndexed("craftedBy", itemId) or {} end
+function DBX:ReagentOf(itemId) return recipeIndexed("reagentOf", itemId) or {} end
+function DBX:RecipeTaughtBy(itemId) return recipeIndexed("taughtBy", itemId) end
 
 ---What disenchants into a material: { min, max = item levels, quality = {2, 3, 4} }, or nil.
-function DBX:DisenchantedFrom(itemId) return recipeIndex("disenchant", itemId) end
+function DBX:DisenchantedFrom(itemId) return recipeIndexed("disenchant", itemId) end
 
 ---A recipe's colour at a skill: "red" (can't learn it yet), "orange", "yellow", "green" or
 ---"grey" (no more skill-ups); nil without a skill.
 function DBX.RecipeColor(rec, skill)
   if not (rec and skill) then return nil end
-  local l = rec.levels
-  if skill < (rec.learn or l[1]) then return "red" end
-  if skill < l[2] then return "orange" end
-  if skill < l[3] then return "yellow" end
-  if skill < l[4] then return "green" end
+  local levels = rec.levels   -- the skill each colour starts at: orange, yellow, green, grey
+  if skill < (rec.learn or levels[1]) then return "red" end
+  if skill < levels[2] then return "orange" end
+  if skill < levels[3] then return "yellow" end
+  if skill < levels[4] then return "green" end
   return "grey"
 end
