@@ -28,21 +28,30 @@ local function hsl(h, s, l)
 end
 
 local PALETTE = {}
+local PALETTE_SIZE = 100
+local GOLDEN_ANGLE = 0.6180339887   -- as a share of the hue circle
 local SATURATION = { .85, .7, .95, .6 }
 local LIGHTNESS = { .62, .55, .7, .66, .58 }
+local LIGHTNESS_STEP = .03
 local function luminance(c) return .3 * c[1] + .59 * c[2] + .11 * c[3] end
-for i = 0, 99 do
-  local h, s, l = (i * 0.6180339887) % 1, SATURATION[i % 4 + 1], LIGHTNESS[i % 5 + 1]
+for i = 0, PALETTE_SIZE - 1 do
+  local h, s, l = (i * GOLDEN_ANGLE) % 1, SATURATION[i % 4 + 1], LIGHTNESS[i % 5 + 1]
   local c = hsl(h, s, l)
   -- blues and violets are dark at any given lightness, yellows bright: nudge each hue into
   -- a band that reads on the map art
-  while luminance(c) < .42 and l < .85 do l = l + .03 c = hsl(h, s, l) end
-  while luminance(c) > .82 and l > .35 do l = l - .03 c = hsl(h, s, l) end
+  while luminance(c) < .42 and l < .85 do
+    l = l + LIGHTNESS_STEP
+    c = hsl(h, s, l)
+  end
+  while luminance(c) > .82 and l > .35 do
+    l = l - LIGHTNESS_STEP
+    c = hsl(h, s, l)
+  end
   PALETTE[i + 1] = c
 end
 Colors.PALETTE = PALETTE
 
-local function saved()
+local function savedColors()
   local db = Core.db
   if not db then return nil end
   db.questColors = db.questColors or {}
@@ -50,7 +59,7 @@ local function saved()
 end
 
 -- a stable number for any key: quest ids as they are, strings ("track:npcs:mottled boar") hashed
-local function number(key)
+local function stableNumber(key)
   if type(key) == "number" then return key end
   local h = 0
   for i = 1, #tostring(key) do h = (h * 31 + string.byte(key, i)) % 1000003 end
@@ -60,10 +69,11 @@ end
 ---The colour of a quest {r, g, b}: the player's choice, or a stable default. Any key works
 ---(1.9): addons colour other things the same way, e.g. Clairvoyance's tracked entries.
 function Colors:ForQuest(questId)
-  local s = saved()
-  local c = s and s[questId]
+  local chosen = savedColors()
+  local c = chosen and chosen[questId]
   if c then return c end
-  return PALETTE[(number(questId) * 37) % #PALETTE + 1]
+  -- the multiplier spreads neighbouring quest ids across the palette
+  return PALETTE[(stableNumber(questId) * 37) % #PALETTE + 1]
 end
 Colors.For = Colors.ForQuest
 
@@ -72,38 +82,55 @@ local inUseProviders = {}
 function Colors:RegisterInUse(owner, fn) inUseProviders[owner] = fn end
 
 function Colors:Set(questId, color)
-  local s = saved()
-  if not s or not color then return end
-  s[questId] = { color[1], color[2], color[3] }
+  local chosen = savedColors()
+  if not chosen or not color then return end
+  chosen[questId] = { color[1], color[2], color[3] }
   Core:Send("NORGANNON_QUEST_COLOR_CHANGED", questId)
 end
 
-local function close(a, b)
+local TOO_SIMILAR = .04   -- squared distance in RGB
+
+local function similar(a, b)
   local dr, dg, db = a[1] - b[1], a[2] - b[2], a[3] - b[3]
-  return dr * dr + dg * dg + db * db < .04
+  return dr * dr + dg * dg + db * db < TOO_SIMILAR
+end
+
+local function similarToAny(c, list)
+  for _, other in ipairs(list) do
+    if similar(c, other) then return true end
+  end
+  return false
+end
+
+-- the colour of everything else on screen: the quest log's, and the keys addons report
+local function otherColorsInUse(questId)
+  local inUse = {}
+  for _, id in ipairs(Core.Player and Core.Player:QuestIds() or {}) do
+    if id ~= questId then inUse[#inUse + 1] = Colors:ForQuest(id) end
+  end
+  for _, fn in pairs(inUseProviders) do
+    for _, key in ipairs(fn() or {}) do
+      if key ~= questId then inUse[#inUse + 1] = Colors:ForQuest(key) end
+    end
+  end
+  return inUse
 end
 
 ---A new random palette colour for the quest, unlike its current one and, where possible,
 ---unlike the colours of the other quests in the log.
 function Colors:Randomize(questId)
   local current = self:ForQuest(questId)
-  local inUse = { current }
-  for _, id in ipairs(Core.Player and Core.Player:QuestIds() or {}) do
-    if id ~= questId then inUse[#inUse + 1] = self:ForQuest(id) end
-  end
-  for _, fn in pairs(inUseProviders) do
-    for _, key in ipairs(fn() or {}) do
-      if key ~= questId then inUse[#inUse + 1] = self:ForQuest(key) end
-    end
-  end
+  local inUse = otherColorsInUse(questId)
+  inUse[#inUse + 1] = current
   local candidates = {}
   for _, c in ipairs(PALETTE) do
-    local free = true
-    for _, used in ipairs(inUse) do if close(c, used) then free = false break end end
-    if free then candidates[#candidates + 1] = c end
+    if not similarToAny(c, inUse) then candidates[#candidates + 1] = c end
   end
   if #candidates == 0 then
-    for _, c in ipairs(PALETTE) do if not close(c, current) then candidates[#candidates + 1] = c end end
+    -- a crowded screen: settle for anything unlike the current colour
+    for _, c in ipairs(PALETTE) do
+      if not similar(c, current) then candidates[#candidates + 1] = c end
+    end
   end
   local pick = candidates[math.random(#candidates)]
   self:Set(questId, pick)
