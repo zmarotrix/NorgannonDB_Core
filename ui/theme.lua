@@ -37,6 +37,8 @@ UI.C = {
   -- buttons
   redTop = hex("b0261d"), redBottom = hex("5c0d09"), redBorder = hex("e0b049"),
   quietTop = hex("3b302a"), quietBottom = hex("1d1714"), quietBorder = hex("8a7344"), quietText = hex("d8c79a"),
+  -- the empty part of bars, sliders and switches
+  track = { .165, .137, .102, 1 },
 }
 
 ---The accent colour of a suite addon, by key (gold for anything unknown).
@@ -47,7 +49,8 @@ end
 
 ---Mix two colours: t = 0 gives a, 1 gives b.
 function UI.Mix(a, b, t)
-  return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, (a[4] or 1) + ((b[4] or 1) - (a[4] or 1)) * t }
+  local alphaA, alphaB = a[4] or 1, b[4] or 1
+  return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, alphaA + (alphaB - alphaA) * t }
 end
 
 ---|cffrrggbb colour code for a colour table.
@@ -101,11 +104,13 @@ function UI.Text(parent, role, size, color, layer)
   return fs
 end
 
+local GLOW_RINGS = { { 1, .42 }, { 2, .14 } }   -- radius, opacity of each copy
+-- the eight compass directions (.71 = cos 45 degrees, so the diagonals sit at the same radius)
+local GLOW_DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { .71, .71 }, { -.71, .71 }, { .71, -.71 }, { -.71, -.71 } }
+
 ---A soft outer glow behind a FontString (default black): faint copies of the text in two rings,
 ---1 px out and 2 px out, drawn under it. They follow the text, font and visibility of the
 ---original. Turns the FontString's own drop shadow off. Returns the copies.
-local GLOW_RINGS = { { 1, .42 }, { 2, .14 } }   -- radius, opacity of each copy
-local GLOW_DIRS = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 }, { .71, .71 }, { -.71, .71 }, { .71, -.71 }, { -.71, -.71 } }
 function UI.Glow(fs, color, strength)
   if fs.glow then return fs.glow end
   local c = color or UI.C.black
@@ -154,8 +159,10 @@ local function gameDifficulty(level)
 end
 
 -- Classic rules, for clients without the API (and the offline harness).
+-- how many levels below the player a quest stays green
 local function greenRange(level)
-  if level <= 5 then return 5 elseif level <= 39 then return 5 + math.floor(level / 10) end
+  if level <= 5 then return 5 end
+  if level <= 39 then return 5 + math.floor(level / 10) end
   return 1 + math.floor(level / 5)
 end
 
