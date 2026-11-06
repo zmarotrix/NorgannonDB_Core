@@ -294,7 +294,8 @@ local function highlightKey(pin)
 end
 Map.HighlightKey = highlightKey
 
-local DIM = .3
+local DIM = .3    -- opacity of everything outside the highlighted group
+Map.DIM = DIM
 local applyHighlight   -- defined after the frame pools
 
 ---Highlights one group (dims the others on the world map, minimap and compass); nil clears.

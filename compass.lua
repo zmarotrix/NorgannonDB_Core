@@ -19,13 +19,18 @@ Core.Compass = Compass
 
 local WIDTH, HEIGHT = 560, 30
 local FOV = math.pi                -- the strip spans 180 degrees
+local HALF_FOV = FOV / 2
+local END_MARGIN = 40              -- the scale stops this far short of the strip's ends
+local DEFAULT_Y = -62              -- under the top of the screen
 local MAX_MARKERS = 24
 local NEAREST_EVERY = 0.25         -- seconds between "nearest pin per group" passes
 local NEAR, FAR = 60, 1200         -- yards: full size at NEAR, smallest and faintest at FAR
+local MARKER_MIN, MARKER_MAX = 11, 18
+local FOCUS_MARKER = 18            -- the arrow's target, at any distance
 
 local f = CreateFrame("Frame", "NorgannonCoreCompass", UIParent)
 f:SetSize(WIDTH, HEIGHT)
-f:SetPoint("TOP", UIParent, "TOP", 0, -62)
+f:SetPoint("TOP", UIParent, "TOP", 0, DEFAULT_Y)
 f:SetFrameStrata("LOW")
 f:EnableMouse(false)              -- click-through; markers take the mouse themselves
 f:SetMovable(true)
@@ -42,14 +47,18 @@ local function band(side)
   t:SetColorTexture(1, 1, 1, 1)
   local dark = CreateColor(.03, .025, .02, .72)
   local clear = CreateColor(.03, .025, .02, 0)
-  if side == "LEFT" then t:SetGradient("HORIZONTAL", clear, dark) else t:SetGradient("HORIZONTAL", dark, clear) end
+  if side == "LEFT" then
+    t:SetGradient("HORIZONTAL", clear, dark)
+  else
+    t:SetGradient("HORIZONTAL", dark, clear)
+  end
 end
 band("LEFT")
 band("RIGHT")
 local line = f:CreateTexture(nil, "BORDER")
 line:SetHeight(1)
-line:SetPoint("BOTTOMLEFT", 40, 3)
-line:SetPoint("BOTTOMRIGHT", -40, 3)
+line:SetPoint("BOTTOMLEFT", END_MARGIN, 3)
+line:SetPoint("BOTTOMRIGHT", -END_MARGIN, 3)
 line:SetColorTexture(C.frameGold[1], C.frameGold[2], C.frameGold[3], .7)
 local notch = f:CreateTexture(nil, "OVERLAY")
 notch:SetTexture(UI.TEX.arrow)
@@ -57,30 +66,35 @@ notch:SetSize(12, 12)
 notch:SetPoint("TOP", f, "BOTTOM", 0, 5)
 notch:SetVertexColor(C.gold[1], C.gold[2], C.gold[3])
 
--- cardinal letters and ticks every 15 degrees
-local marks = {}
+-- Cardinal letters and ticks every 15 degrees. The game's angles count counter-clockwise from
+-- north, so west is 90.
+local CARDINALS = { [0] = "N", [90] = "W", [180] = "S", [270] = "E" }
+local ORDINALS = { [45] = "NW", [135] = "SW", [225] = "SE", [315] = "NE" }
+
+local scaleMarks = {}
 for deg = 0, 345, 15 do
   local m = {}
   m.angle = math.rad(deg)
-  if deg % 90 == 0 then
+  if CARDINALS[deg] then
     m.text = UI.Text(f, "title", 15, C.gold)
-    m.text:SetText(({ [0] = "N", [90] = "W", [180] = "S", [270] = "E" })[deg])
-  elseif deg % 45 == 0 then
+    m.text:SetText(CARDINALS[deg])
+  elseif ORDINALS[deg] then
     m.text = UI.Text(f, "title", 11, C.muted)
-    m.text:SetText(({ [45] = "NW", [135] = "SW", [225] = "SE", [315] = "NE" })[deg])
+    m.text:SetText(ORDINALS[deg])
   else
     m.tick = f:CreateTexture(nil, "BORDER")
     m.tick:SetSize(1, 5)
     m.tick:SetColorTexture(C.muted[1], C.muted[2], C.muted[3], .6)
   end
-  marks[#marks + 1] = m
+  scaleMarks[#scaleMarks + 1] = m
 end
 
--- the screen offset of a world angle, given the player's facing (nil when out of view)
-local function offset(angle, facing)
+-- the screen offset of a world angle, given the player's facing (nil when out of view),
+-- and the angle from straight ahead
+local function screenOffset(angle, facing)
   local delta = (angle - facing + math.pi) % (2 * math.pi) - math.pi   -- -pi..pi, positive = left
-  if math.abs(delta) > FOV / 2 then return nil end
-  return -delta / (FOV / 2) * (WIDTH / 2 - 40), delta
+  if math.abs(delta) > HALF_FOV then return nil end
+  return -delta / HALF_FOV * (WIDTH / 2 - END_MARGIN), delta
 end
 
 -------------------------------------------------------------------------------------------
@@ -105,15 +119,18 @@ local function markerEnter(self)
   GameTooltip:Show()
 end
 
-local function marker(i)
+local function markerFrame(i)
   local m = markers[i]
   if not m then
     m = CreateFrame("Button", nil, f)
-    m.GetCenter = function() return nil end
+    m.GetCenter = function() return nil end   -- as the map's pins do: see NoCenter in map.lua
     m.icon = m:CreateTexture(nil, "ARTWORK")
     m.icon:SetAllPoints()
     m:SetScript("OnEnter", markerEnter)
-    m:SetScript("OnLeave", function() Core.Map:SetHighlight(nil) GameTooltip:Hide() end)
+    m:SetScript("OnLeave", function()
+      Core.Map:SetHighlight(nil)
+      GameTooltip:Hide()
+    end)
     markers[i] = m
   end
   return m
@@ -122,7 +139,7 @@ end
 -- nearest pin per compass group, recomputed every NEAREST_EVERY seconds
 local targets = {}
 
-local function collect(px, py, instance)
+local function collectTargets(px, py, instance)
   local best = {}
   for _, pins in pairs(Core.Map.owners) do
     for _, pin in ipairs(pins) do
@@ -132,14 +149,14 @@ local function collect(px, py, instance)
         if wx and inst == instance then
           local dx, dy = wx - px, wy - py
           local d2 = dx * dx + dy * dy
-          local b = best[group]
-          if not b or d2 < b.d2 then best[group] = { pin = pin, x = wx, y = wy, d2 = d2 } end
+          local nearest = best[group]
+          if not nearest or d2 < nearest.d2 then best[group] = { pin = pin, x = wx, y = wy, d2 = d2 } end
         end
       end
     end
   end
   local list = {}
-  for _, b in pairs(best) do list[#list + 1] = b end
+  for _, nearest in pairs(best) do list[#list + 1] = nearest end
   local focus = Core.Arrow and Core.Arrow.world and Core.Arrow.target
   if focus and Core.Arrow.world.instance == instance then
     local w = Core.Arrow.world
@@ -148,6 +165,7 @@ local function collect(px, py, instance)
       x = w.x, y = w.y, d2 = dx * dx + dy * dy }
   end
   table.sort(list, function(a, b) return a.d2 < b.d2 end)
+  -- only the nearest fit
   for i = MAX_MARKERS + 1, #list do list[i] = nil end
   targets = list
 end
@@ -160,13 +178,67 @@ local sinceNearest = NEAREST_EVERY
 local FADE_OUT, FADE_IN = .6, .25   -- seconds
 local fade = 0                      -- the strip's opacity while fading in and out
 
+local function drawScale(facing)
+  for _, m in ipairs(scaleMarks) do
+    local x, delta = screenOffset(m.angle, facing)
+    local region = m.text or m.tick
+    if x then
+      region:ClearAllPoints()
+      if m.text then
+        region:SetPoint("CENTER", f, "CENTER", x, 2)
+      else
+        region:SetPoint("BOTTOM", f, "BOTTOM", x, 4)
+      end
+      region:SetAlpha(1 - (math.abs(delta) / HALF_FOV) ^ 3)   -- fading toward the strip's ends
+      region:Show()
+    else
+      region:Hide()
+    end
+  end
+end
+
+local function drawMarkers(px, py, instance, facing)
+  local n = 0
+  for _, t in ipairs(targets) do
+    local angle, distance = HBD:GetWorldVector(instance, px, py, t.x, t.y)
+    local x, delta
+    if angle then x, delta = screenOffset(angle, facing) end
+    if x then
+      n = n + 1
+      local m = markerFrame(n)
+      local closeness = 1 - math.max(0, math.min(1, (distance - NEAR) / (FAR - NEAR)))
+      local size = t.pin.focus and FOCUS_MARKER or (MARKER_MIN + (MARKER_MAX - MARKER_MIN) * closeness)
+      m:SetSize(size, size)
+      local tintable = Core.Map.SetIcon(m.icon, t.pin.icon)
+      local c = Core.Map.PinColor(t.pin)
+      if c and tintable then
+        m.icon:SetVertexColor(c[1], c[2], c[3])
+      else
+        m.icon:SetVertexColor(1, 1, 1)
+      end
+      local key = Core.Map.highlight
+      local dim = (key and Core.Map.HighlightKey(t.pin) ~= key) and Core.Map.DIM or 1
+      -- fainter with distance and toward the strip's ends
+      m:SetAlpha((.45 + .55 * closeness) * (1 - (math.abs(delta) / HALF_FOV) ^ 4) * dim)
+      m:ClearAllPoints()
+      m:SetPoint("CENTER", f, "CENTER", x, 1)
+      m:SetFrameLevel(f:GetFrameLevel() + 2 + math.floor(closeness * 10))   -- nearer ones on top
+      m.pin, m.distance = t.pin, distance
+      m:Show()
+    end
+  end
+  for i = n + 1, #markers do
+    markers[i]:Hide()
+    markers[i].pin = nil
+  end
+  Compass.stats.markers = n
+end
+
 -- When the game stops giving addons your position or facing (secret values in combat on this
 -- client, or none at all in some places), the compass can't follow you: it holds its last
 -- picture and fades out instead of jumping or vanishing, and fades back in when it can update.
 function Compass:Update(dt)
-  local db = Core.db
-  local enabled = not (db and db.compass and db.compass.hidden)
-  if not enabled then
+  if not Compass:IsEnabled() then
     f:Hide()
     fade = 0
     return
@@ -186,8 +258,9 @@ function Compass:Update(dt)
   sinceNearest = sinceNearest + (dt or NEAREST_EVERY)
   if sinceNearest >= NEAREST_EVERY then
     sinceNearest = 0
-    collect(px, py, instance)
+    collectTargets(px, py, instance)
   end
+  local db = Core.db
   if #targets == 0 and not (db and db.compass and db.compass.alwaysShow) then
     f:Hide()
     fade = 0
@@ -197,51 +270,14 @@ function Compass:Update(dt)
   f:Show()
   fade = Compass.moving and 1 or math.min(1, fade + (dt or 0) / FADE_IN)
   f:SetAlpha(fade)
-
-  for _, m in ipairs(marks) do
-    local x, delta = offset(m.angle, facing)
-    local region = m.text or m.tick
-    if x then
-      region:ClearAllPoints()
-      if m.text then region:SetPoint("CENTER", f, "CENTER", x, 2) else region:SetPoint("BOTTOM", f, "BOTTOM", x, 4) end
-      region:SetAlpha(1 - (math.abs(delta) / (FOV / 2)) ^ 3)
-      region:Show()
-    else
-      region:Hide()
-    end
-  end
-
-  local n = 0
-  for _, t in ipairs(targets) do
-    local angle, distance = HBD:GetWorldVector(instance, px, py, t.x, t.y)
-    local x, delta
-    if angle then x, delta = offset(angle, facing) end
-    if x then
-      n = n + 1
-      local m = marker(n)
-      local closeness = 1 - math.max(0, math.min(1, (distance - NEAR) / (FAR - NEAR)))
-      local size = t.pin.focus and 18 or (11 + 7 * closeness)
-      m:SetSize(size, size)
-      local tintable = Core.Map.SetIcon(m.icon, t.pin.icon)
-      local c = Core.Map.PinColor(t.pin)
-      if c and tintable then m.icon:SetVertexColor(c[1], c[2], c[3]) else m.icon:SetVertexColor(1, 1, 1) end
-      local key = Core.Map.highlight
-      local dim = (key and Core.Map.HighlightKey(t.pin) ~= key) and .3 or 1
-      m:SetAlpha((.45 + .55 * closeness) * (1 - (math.abs(delta) / (FOV / 2)) ^ 4) * dim)
-      m:ClearAllPoints()
-      m:SetPoint("CENTER", f, "CENTER", x, 1)
-      m:SetFrameLevel(f:GetFrameLevel() + 2 + math.floor(closeness * 10))
-      m.pin, m.distance = t.pin, distance
-      m:Show()
-    end
-  end
-  for i = n + 1, #markers do markers[i]:Hide() markers[i].pin = nil end
-  Compass.stats.markers = n
+  drawScale(facing)
+  drawMarkers(px, py, instance, facing)
 end
 
 f:SetScript("OnUpdate", function(_, dt) Compass:Update(dt) end)
 
--- an always-running driver: the strip itself hides when there is nothing to show
+-- A hidden frame gets no OnUpdate, and the strip hides when there is nothing to show, so this
+-- always-running frame is what notices when there is something again.
 local driver = CreateFrame("Frame")
 local idle = 0
 driver:SetScript("OnUpdate", function(_, dt)
@@ -257,6 +293,11 @@ end)
 -- Settings
 -------------------------------------------------------------------------------------------
 
+local function settings()
+  Core.db.compass = Core.db.compass or {}
+  return Core.db.compass
+end
+
 function Compass:SetShown(on)
   if Core.db then
     Core.db.compass = Core.db.compass or {}
@@ -270,8 +311,8 @@ function Compass:IsEnabled()
   return not (Core.db and Core.db.compass and Core.db.compass.hidden)
 end
 
--- unlock to move: /norg compass move
--- moving: the strip lights up with a hint; drag it, then Lock (or right-click it)
+-- Moving it (/norg compass move, or the settings page): the strip lights up with a hint; drag
+-- it, then Lock (or right-click it).
 local moveHint = f:CreateFontString(nil, "OVERLAY")
 moveHint:SetFontObject(UI.Font("body", 12))
 moveHint:SetPoint("TOP", f, "BOTTOM", 0, -8)
@@ -282,11 +323,6 @@ moveGlow:SetAllPoints()
 moveGlow:SetColorTexture(1, .82, .3, .18)
 moveGlow:Hide()
 
-local function settings()
-  Core.db.compass = Core.db.compass or {}
-  return Core.db.compass
-end
-
 function Compass:SetMovable(on)
   -- the client rejects RegisterForDrag(nil): register once, and lock by clearing the handlers
   -- and the mouse instead
@@ -296,10 +332,11 @@ function Compass:SetMovable(on)
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", function(self)
       self:StopMovingOrSizing()
-      local point, _, relativePoint, x, y = self:GetPoint()
-      if Core.db then Core.db.windows.NorgannonCoreCompass = { point = point, relativePoint = relativePoint, x = x, y = y } end
+      UI.SavePosition(self, "NorgannonCoreCompass")
     end)
-    f:SetScript("OnMouseUp", function(_, button) if button == "RightButton" then Compass:SetMovable(false) end end)
+    f:SetScript("OnMouseUp", function(_, button)
+      if button == "RightButton" then Compass:SetMovable(false) end
+    end)
   else
     f:SetScript("OnDragStart", nil)
     f:SetScript("OnDragStop", nil)
@@ -325,14 +362,10 @@ function Compass:GetSize() return settings().scale or 1 end
 function Compass:ResetPosition()
   if Core.db then Core.db.windows.NorgannonCoreCompass = nil end
   f:ClearAllPoints()
-  f:SetPoint("TOP", UIParent, "TOP", 0, -62)
+  f:SetPoint("TOP", UIParent, "TOP", 0, DEFAULT_Y)
 end
 
 Core:OnLogin(function()
   f:SetScale(Compass:GetSize())
-  local saved = Core.db and Core.db.windows.NorgannonCoreCompass
-  if saved and saved.point then
-    f:ClearAllPoints()
-    f:SetPoint(saved.point, UIParent, saved.relativePoint or saved.point, saved.x or 0, saved.y or 0)
-  end
+  UI.RestorePosition(f, "NorgannonCoreCompass")
 end)

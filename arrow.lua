@@ -18,8 +18,10 @@ local Arrow = {}
 Core.Arrow = Arrow
 
 local ARRIVE_YARDS = 6
-local THROTTLE = 0.03
+local THROTTLE = 0.03     -- seconds between updates
 local GREEN, GOLD, RED = { .35, 1, .45 }, { 1, .82, .2 }, { 1, .3, .25 }
+local GREY_NO_POSITION = .5   -- no way to tell where the target is from here
+local GREY_NO_FACING = .75    -- the distance is known, the heading isn't
 
 local f = CreateFrame("Button", "NorgannonCoreArrow", UIParent)
 f:SetSize(80, 92)
@@ -51,14 +53,14 @@ f.title:SetJustifyH("CENTER")
 
 local function db() return Core.db end
 
-local function savePosition()
-  local point, _, relativePoint, x, y = f:GetPoint()
-  if db() then db().windows.NorgannonCoreArrow = { point = point, relativePoint = relativePoint, x = x, y = y } end
-end
-
-f:SetScript("OnDragStart", function(self) if not (db() and db().arrowLocked) then self:StartMoving() end end)
-f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() savePosition() end)
-f:SetScript("OnClick", function(_, button) if button == "RightButton" then Arrow:Clear("dismissed") end end)
+f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+f:SetScript("OnDragStop", function(self)
+  self:StopMovingOrSizing()
+  UI.SavePosition(self, "NorgannonCoreArrow")
+end)
+f:SetScript("OnClick", function(_, button)
+  if button == "RightButton" then Arrow:Clear("dismissed") end
+end)
 f:SetScript("OnEnter", function(self)
   local t = Arrow.target
   if not t then return end
@@ -129,20 +131,24 @@ local function yards(d)
   return string.format("%d yd", d)
 end
 
+-- straight up in a flat grey: no heading to show
+local function pointNowhere(grey)
+  f.arrow:SetVertexColor(grey, grey, grey)
+  f.arrow:SetRotation(0)
+end
+
 function Arrow:Update()
   local target, world = self.target, self.world
   if not target then return end
   local px, py, instance = HBD:GetPlayerWorldPosition()
   if not px or Core.IsSecret(px) or Core.IsSecret(py) then
     -- instances and other places without a position: say so instead of guessing
-    f.arrow:SetVertexColor(.5, .5, .5)
-    f.arrow:SetRotation(0)
+    pointNowhere(GREY_NO_POSITION)
     f.distance:SetText("?")
     return
   end
   if instance ~= world.instance then
-    f.arrow:SetVertexColor(.5, .5, .5)
-    f.arrow:SetRotation(0)
+    pointNowhere(GREY_NO_POSITION)
     f.distance:SetText("Another continent")
     return
   end
@@ -162,13 +168,10 @@ function Arrow:Update()
     f.arrow:SetRotation(rotation)
     local c = headingColor(rotation)
     f.arrow:SetVertexColor(c[1], c[2], c[3])
-    self.rotation = rotation
   else
-    f.arrow:SetVertexColor(.75, .75, .75)
-    f.arrow:SetRotation(0)
+    pointNowhere(GREY_NO_FACING)
   end
   f.distance:SetText(yards(distance))
-  self.distance = distance
 end
 
 local elapsed = 0
@@ -189,11 +192,7 @@ function Arrow:GetSize() return db() and db().arrowScale or 1 end
 -- restore the position, size and target after /reload or login
 Core:OnLogin(function()
   f:SetScale(Arrow:GetSize())
-  local saved = db() and db().windows.NorgannonCoreArrow
-  if saved and saved.point then
-    f:ClearAllPoints()
-    f:SetPoint(saved.point, UIParent, saved.relativePoint or saved.point, saved.x or 0, saved.y or 0)
-  end
+  UI.RestorePosition(f, "NorgannonCoreArrow")
   local target = db() and db().arrowTarget
   if target then Arrow:SetTarget(target) end
 end)
