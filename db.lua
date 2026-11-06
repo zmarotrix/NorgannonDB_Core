@@ -216,7 +216,7 @@ end
 function DBX:Search(text, opts)
   opts = opts or {}
   local needle = string.lower(strtrim(text or ""))
-  if needle == "" then return {} end
+  if needle == "" then return {}, 0 end
   self:EnsureIndex()
 
   local kindsKey = ""
