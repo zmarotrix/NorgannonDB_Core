@@ -23,7 +23,10 @@ player.lua
 questie_serializer.lua
 comms.lua
 ui\theme.lua
+ui\primitives.lua
 ui\widgets.lua
+ui\bar.lua
+ui\window.lua
 ui\list.lua
 ui\about.lua
 ui\menu.lua
