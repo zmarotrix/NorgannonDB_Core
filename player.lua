@@ -17,6 +17,7 @@ Core.Player = Player
 
 local IsSecret = Core.IsSecret
 
+-- a table we may read: the client can hand back a secret one in combat
 local function public(t)
   return type(t) == "table" and not IsSecret(t)
 end
@@ -26,15 +27,17 @@ end
 -------------------------------------------------------------------------------------------
 
 -- a client format string ("%s slain: %d/%d", "%1$s: %2$d/%3$d") as a Lua pattern
+local STRING_SLOT, NUMBER_SLOT = "\001", "\002"   -- stand-ins that survive the escaping below
 local patterns = {}
 local function formatPattern(format)
   if type(format) ~= "string" then return nil end
   local p = patterns[format]
   if p then return p end
   -- placeholders first (positional "%1$s" before plain "%s"), then escape, then captures
-  p = format:gsub("%%%d+%$s", "\001"):gsub("%%%d+%$d", "\002"):gsub("%%s", "\001"):gsub("%%d", "\002")
+  p = format:gsub("%%%d+%$s", STRING_SLOT):gsub("%%%d+%$d", NUMBER_SLOT)
+  p = p:gsub("%%s", STRING_SLOT):gsub("%%d", NUMBER_SLOT)
   p = p:gsub("([%%%(%)%.%+%-%*%?%[%]%^%$])", "%%%1")
-  p = p:gsub("\001", "(.+)"):gsub("\002", "(%%d+)")
+  p = p:gsub(STRING_SLOT, "(.+)"):gsub(NUMBER_SLOT, "(%%d+)")
   patterns[format] = p
   return p
 end
@@ -52,7 +55,9 @@ function Player.ObjectiveName(text, objectiveType)
       if capture and not tonumber(capture) then return strtrim(capture) end
     end
   end
-  local name = string.match(text, "^(.-)%s*[:：]%s*%d+%s*/%s*%d+$") or string.match(text, "^%d+%s*/%s*%d+%s+(.+)$")
+  -- no format to go by: the counter last (with a colon, or CJK's full-width one) or first
+  local name = string.match(text, "^(.-)%s*[:：]%s*%d+%s*/%s*%d+$")
+    or string.match(text, "^%d+%s*/%s*%d+%s+(.+)$")
   return strtrim(name or text)
 end
 
@@ -185,6 +190,7 @@ end
 local function readSkills()
   local skills = {}
   if GetProfessions and GetProfessionInfo then
+    -- pairs: GetProfessions gives nil for an empty profession slot
     for _, index in pairs({ GetProfessions() }) do
       local _, _, rank, _, _, _, skillLine = GetProfessionInfo(index)
       if skillLine and rank and not IsSecret(rank) then skills[skillLine] = rank end
@@ -208,8 +214,12 @@ end
 
 local function refreshSkills()
   local new, changed = readSkills(), false
-  for id, rank in pairs(new) do if Player.skills[id] ~= rank then changed = true end end
-  for id in pairs(Player.skills) do if not new[id] then changed = true end end
+  for id, rank in pairs(new) do
+    if Player.skills[id] ~= rank then changed = true end
+  end
+  for id in pairs(Player.skills) do
+    if not new[id] then changed = true end
+  end
   Player.skills = new
   if changed then
     Core:Send("NORGANNON_SKILLS_CHANGED")
@@ -292,32 +302,42 @@ local function scanSpells(skill)
   if found then addRecipes(skill, ids, "spells") end
 end
 
-local function scanWindow()
-  local T = rawget(_G, "C_TradeSkillUI")
-  if not (T and T.IsTradeSkillReady and T.GetRecipeInfo and T.GetBaseProfessionInfo) then return end
-  local ok, ready = pcall(T.IsTradeSkillReady)
-  if not ok or not ready or IsSecret(ready) then return end
-  -- someone else's profession, opened from a chat link, says nothing about this character
+-- true while a profession window of this character's own is ready to read: someone else's
+-- profession, opened from a chat link, says nothing about this character
+local function ownWindowReady(TradeSkill)
+  local ok, ready = pcall(TradeSkill.IsTradeSkillReady)
+  if not ok or not ready or IsSecret(ready) then return false end
   for _, other in ipairs({ "IsTradeSkillLinked", "IsTradeSkillGuild" }) do
-    if T[other] then
-      local okOther, is = pcall(T[other])
-      if okOther and is then return end
+    if TradeSkill[other] then
+      local okOther, is = pcall(TradeSkill[other])
+      if okOther and is then return false end
     end
   end
-  local okBase, base = pcall(T.GetBaseProfessionInfo)
-  local fallback = okBase and public(base) and not IsSecret(base.professionID) and base.professionID or nil
-  local list
+  return true
+end
+
+-- every recipe id the window lists, from whichever reader this client has
+local function listedRecipes(TradeSkill)
   for _, reader in ipairs({ "GetAllRecipeIDs", "GetFilteredRecipeIDs" }) do
-    if T[reader] then
-      local okList, got = pcall(T[reader])
-      if okList and public(got) and #got > 0 then list = got break end
+    if TradeSkill[reader] then
+      local ok, list = pcall(TradeSkill[reader])
+      if ok and public(list) and #list > 0 then return list end
     end
   end
+end
+
+local function scanWindow()
+  local TradeSkill = rawget(_G, "C_TradeSkillUI")
+  if not (TradeSkill and TradeSkill.IsTradeSkillReady and TradeSkill.GetRecipeInfo and TradeSkill.GetBaseProfessionInfo) then return end
+  if not ownWindowReady(TradeSkill) then return end
+  local okBase, base = pcall(TradeSkill.GetBaseProfessionInfo)
+  local fallback = okBase and public(base) and not IsSecret(base.professionID) and base.professionID or nil
+  local list = listedRecipes(TradeSkill)
   if not list then return end
   -- by the profession NorgannonDB files each recipe under; the client's id for the rest
   local bySkill = {}
   for _, id in ipairs(list) do
-    local okInfo, info = pcall(T.GetRecipeInfo, id)
+    local okInfo, info = pcall(TradeSkill.GetRecipeInfo, id)
     if okInfo and public(info) and info.learned == true then
       local record = Core.DB and Core.DB.Recipe and Core.DB:Recipe(id)
       local skill = record and record.skill or fallback
