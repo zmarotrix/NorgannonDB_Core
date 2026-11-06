@@ -6,6 +6,8 @@ local Core = NorgannonCore
 local UI = Core.UI
 local C, TEX = UI.C, UI.TEX
 
+local WHITE = { 1, 1, 1 }
+
 -------------------------------------------------------------------------------------------
 -- Primitives
 -------------------------------------------------------------------------------------------
@@ -86,20 +88,25 @@ UI.Pill = pill
 
 local CORNER = .25   -- the texture's corner slice, as a share of its size
 
+local function setPiecesColor(self, c, alpha)
+  for _, piece in ipairs(self.pieces) do piece:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
+end
+
 ---A rounded rectangle filling frame: UI.Round(frame, layer, sub, radius[, "line"]).
 ---:SetColor(c, alpha). "line" draws the outline texture instead of the fill.
 function UI.Round(frame, layer, sub, radius, style)
   local file = style == "line" and TEX.roundLine or TEX.round
   local r = radius or 6
   local p = {}
-  local function piece(l, rgt, t, b)
+  local function piece(texLeft, texRight, texTop, texBottom)
     local tx = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
     tx:SetTexture(file)
-    tx:SetTexCoord(l, rgt, t, b)
+    tx:SetTexCoord(texLeft, texRight, texTop, texBottom)
     p[#p + 1] = tx
     return tx
   end
   local m = CORNER
+  -- fixed-size corners; the edges and the centre stretch between them
   local tl, tr = piece(0, m, 0, m), piece(1 - m, 1, 0, m)
   local bl, br = piece(0, m, 1 - m, 1), piece(1 - m, 1, 1 - m, 1)
   for _, corner in ipairs({ tl, tr, bl, br }) do corner:SetSize(r, r) end
@@ -120,10 +127,7 @@ function UI.Round(frame, layer, sub, radius, style)
   local center = piece(m, 1 - m, m, 1 - m)
   center:SetPoint("TOPLEFT", tl, "BOTTOMRIGHT")
   center:SetPoint("BOTTOMRIGHT", br, "TOPLEFT")
-  local box = { pieces = p }
-  function box:SetColor(c, alpha)
-    for _, tx in ipairs(self.pieces) do tx:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
-  end
+  local box = { pieces = p, SetColor = setPiecesColor }
   function box:SetShown(on) for _, tx in ipairs(self.pieces) do tx:SetShown(on) end end
   return box
 end
@@ -146,11 +150,7 @@ function UI.RoundEdge(frame, layer, sub, radius, width)
   bottom:SetPoint("BOTTOMLEFT")
   mid:SetPoint("TOPLEFT", top, "BOTTOMLEFT")
   mid:SetPoint("BOTTOMRIGHT", bottom, "TOPRIGHT")
-  local edge = { pieces = { top, mid, bottom } }
-  function edge:SetColor(c, alpha)
-    for _, tx in ipairs(self.pieces) do tx:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
-  end
-  return edge
+  return { pieces = { top, mid, bottom }, SetColor = setPiecesColor }
 end
 
 ---An icon texture from the Core's media, tinted.
@@ -189,6 +189,7 @@ end
 -- Accent: widgets register with their window and are recoloured by Window:SetAccent
 -------------------------------------------------------------------------------------------
 
+---The suite window a frame sits in, or nil.
 local function windowOf(frame)
   local f = frame
   while f do
@@ -196,6 +197,7 @@ local function windowOf(frame)
     f = f:GetParent()
   end
 end
+UI.WindowOf = windowOf
 
 local function attachAccent(widget)
   local window = windowOf(widget)
@@ -207,6 +209,27 @@ local function attachAccent(widget)
   end
 end
 
+-- For the widgets that keep their whole look in a Paint method: b.ApplyAccent = applyAccent.
+local function applyAccent(self, c)
+  self.accent = c
+  self:Paint()
+end
+
+local function hoverOn(self)
+  self.hover = true
+  self:Paint()
+end
+
+local function hoverOff(self)
+  self.hover = false
+  self:Paint()
+end
+
+local function repaintOnHover(widget)
+  widget:SetScript("OnEnter", hoverOn)
+  widget:SetScript("OnLeave", hoverOff)
+end
+
 -------------------------------------------------------------------------------------------
 -- Buttons
 -------------------------------------------------------------------------------------------
@@ -214,15 +237,15 @@ end
 local BUTTON_STYLES = {
   -- style = function(accent, hover) -> border, fillTop, fillBottom, text
   primary = function(_, hover)
-    if hover then return C.redBorder, UI.Mix(C.redTop, { 1, 1, 1 }, .12), UI.Mix(C.redBottom, { 1, 1, 1 }, .08), { 1, .95, .69 } end
+    if hover then return C.redBorder, UI.Mix(C.redTop, WHITE, .12), UI.Mix(C.redBottom, WHITE, .08), { 1, .95, .69 } end
     return C.redBorder, C.redTop, C.redBottom, C.gold
   end,
   quiet = function(accent, hover)
-    return hover and accent or C.quietBorder, C.quietTop, C.quietBottom, hover and { 1, 1, 1 } or C.quietText
+    return hover and accent or C.quietBorder, C.quietTop, C.quietBottom, hover and WHITE or C.quietText
   end,
   accent = function(accent, hover)
     local top = UI.Mix({ .106, .078, .063 }, accent, hover and .55 or .4)
-    return accent, top, { .07, .05, .035 }, { 1, 1, 1 }
+    return accent, top, { .07, .05, .035 }, WHITE
   end,
 }
 
@@ -242,14 +265,14 @@ function UI.Button(parent, text, style, onClick)
     self.box:Set(border, top, bottom)
     self.label:SetTextColor(textColor[1], textColor[2], textColor[3])
   end
-  function b:ApplyAccent(c) self.accent = c self:Paint() end
+  b.ApplyAccent = applyAccent
   function b:SetLabel(value)
     self.label:SetText(value)
     self:SetWidth(math.max(64, math.floor(self.label:GetStringWidth() + 30)))
   end
 
-  b:SetScript("OnEnter", function(self) self.hover = true self:Paint() end)
-  b:SetScript("OnLeave", function(self) self.hover = false self:Paint() end)
+  repaintOnHover(b)
+  -- the label dips while the button is held
   b:SetScript("OnMouseDown", function(self) self.label:SetPoint("CENTER", 1, -1) end)
   b:SetScript("OnMouseUp", function(self) self.label:SetPoint("CENTER", 0, 0) end)
   if onClick then b:SetScript("OnClick", onClick) end
@@ -266,8 +289,14 @@ function UI.CloseButton(parent, onClick)
   b.box:Set(C.redBorder, C.redTop, C.redBottom)
   b.icon = UI.Icon(b, "close", 12, C.gold)
   b.icon:SetPoint("CENTER")
-  b:SetScript("OnEnter", function(self) self.box:Set(C.redBorder, UI.Mix(C.redTop, { 1, 1, 1 }, .15), C.redBottom) self.icon:SetVertexColor(1, .95, .7) end)
-  b:SetScript("OnLeave", function(self) self.box:Set(C.redBorder, C.redTop, C.redBottom) self.icon:SetVertexColor(C.gold[1], C.gold[2], C.gold[3]) end)
+  b:SetScript("OnEnter", function(self)
+    self.box:Set(C.redBorder, UI.Mix(C.redTop, WHITE, .15), C.redBottom)
+    self.icon:SetVertexColor(1, .95, .7)
+  end)
+  b:SetScript("OnLeave", function(self)
+    self.box:Set(C.redBorder, C.redTop, C.redBottom)
+    self.icon:SetVertexColor(C.gold[1], C.gold[2], C.gold[3])
+  end)
   b:SetScript("OnClick", onClick)
   return b
 end
@@ -306,7 +335,10 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   f.clear.icon = UI.Icon(f.clear, "close", 10, C.muted)
   f.clear.icon:SetPoint("CENTER")
   f.clear:Hide()
-  f.clear:SetScript("OnClick", function() edit:SetText("") edit:ClearFocus() end)
+  f.clear:SetScript("OnClick", function()
+    edit:SetText("")
+    edit:ClearFocus()
+  end)
 
   if hint then
     f.hint = CreateFrame("Frame", nil, f)
@@ -323,7 +355,7 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   function f:Paint()
     self.box:Set(self.focused and self.accent or C.lineStrong, C.inset)
   end
-  function f:ApplyAccent(c) self.accent = c self:Paint() end
+  f.ApplyAccent = applyAccent
   function f:GetText() return edit:GetText() end
   function f:SetText(text) edit:SetText(text or "") end
   function f:SetFocus() edit:SetFocus() end
@@ -335,8 +367,14 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
     if f.hint then f.hint:SetShown(text == "") end
     if onChange then onChange(text) end
   end)
-  edit:SetScript("OnEditFocusGained", function() f.focused = true f:Paint() end)
-  edit:SetScript("OnEditFocusLost", function() f.focused = false f:Paint() end)
+  edit:SetScript("OnEditFocusGained", function()
+    f.focused = true
+    f:Paint()
+  end)
+  edit:SetScript("OnEditFocusLost", function()
+    f.focused = false
+    f:Paint()
+  end)
   edit:SetScript("OnEscapePressed", function(self)
     if self:GetText() ~= "" then self:SetText("") else self:ClearFocus() end
   end)
@@ -383,15 +421,14 @@ function UI.Chip(parent, text, dot, onToggle)
       self.label:SetTextColor(C.muted[1], C.muted[2], C.muted[3])
     end
   end
-  function b:ApplyAccent(c) self.accent = c self:Paint() end
+  b.ApplyAccent = applyAccent
   function b:SetOn(on, silent)
     self.on = on and true or false
     self:Paint()
     if not silent and onToggle then onToggle(self.on) end
   end
   b:SetScript("OnClick", function(self) self:SetOn(not self.on) end)
-  b:SetScript("OnEnter", function(self) self.hover = true self:Paint() end)
-  b:SetScript("OnLeave", function(self) self.hover = false self:Paint() end)
+  repaintOnHover(b)
   attachAccent(b)
   return b
 end
@@ -413,12 +450,12 @@ function UI.Toggle(parent, onChange)
       self.knob:SetVertexColor(1, 1, 1)
     else
       self.border:SetColor(C.lineStrong)
-      self.fill:SetColor({ .165, .137, .102 })
+      self.fill:SetColor(C.track)
       self.knob:SetPoint("LEFT", 3, 0)
       self.knob:SetVertexColor(.54, .49, .38)
     end
   end
-  function b:ApplyAccent(c) self.accent = c self:Paint() end
+  b.ApplyAccent = applyAccent
   function b:SetOn(on, silent)
     self.on = on and true or false
     self:Paint()
@@ -454,8 +491,14 @@ function UI.Tabs(parent, items, onSelect)
     t.line:SetPoint("BOTTOMRIGHT", -4, 0)
     t:SetPoint("BOTTOMLEFT", previous or bar, previous and "BOTTOMRIGHT" or "BOTTOMLEFT", previous and 2 or 0, 0)
     t:SetScript("OnClick", function(self) bar:Select(self.key) end)
-    t:SetScript("OnEnter", function(self) self.hover = true bar:Paint() end)
-    t:SetScript("OnLeave", function(self) self.hover = false bar:Paint() end)
+    t:SetScript("OnEnter", function(self)
+      self.hover = true
+      bar:Paint()
+    end)
+    t:SetScript("OnLeave", function(self)
+      self.hover = false
+      bar:Paint()
+    end)
     function t:Resize()
       local w = self.label:GetStringWidth() + 24
       if (self.count:GetText() or "") ~= "" then w = w + self.count:GetStringWidth() + 4 end
@@ -475,7 +518,7 @@ function UI.Tabs(parent, items, onSelect)
       t.line:SetShown(on)
     end
   end
-  function bar:ApplyAccent(c) self.accent = c self:Paint() end
+  bar.ApplyAccent = applyAccent
   function bar:Select(key, silent)
     self.selected = key
     self:Paint()
@@ -500,12 +543,47 @@ end
 -- Progress bar and card
 -------------------------------------------------------------------------------------------
 
+local MAX_TICKS = 20
+local PARTY_GREY, PARTY_GREY_SHARE = { .53, .53, .53 }, .55   -- the party variant: the accent, greyed
+local MARKER_GREY = { .78, .78, .78 }
+
+-- a dividing line between every two steps, in the frame above the fill
+local function paintTicks(bar, width, height)
+  local steps = (bar.steps >= 2 and bar.steps <= MAX_TICKS) and bar.steps or 0
+  for i = 1, math.max(steps - 1, #bar.ticks) do
+    local tick = bar.ticks[i]
+    if i < steps then
+      if not tick then
+        tick = bar.over:CreateTexture(nil, "OVERLAY", nil, 1)
+        tick:SetColorTexture(0, 0, 0, .55)
+        tick:SetSize(1, height)
+        bar.ticks[i] = tick
+      end
+      tick:ClearAllPoints()
+      tick:SetPoint("CENTER", bar, "LEFT", width * i / steps, 0)
+      tick:Show()
+    elseif tick then
+      tick:Hide()
+    end
+  end
+end
+
+local function paintMarker(bar, width)
+  if not bar.markerRatio then
+    bar.marker:Hide()
+    return
+  end
+  bar.marker:ClearAllPoints()
+  bar.marker:SetPoint("CENTER", bar, "LEFT", width * bar.markerRatio, 0)
+  local c = bar.markerColor or MARKER_GREY
+  bar.marker:SetVertexColor(c[1], c[2], c[3], 1)
+  bar.marker:Show()
+end
+
 ---A rounded progress bar: UI.Bar(parent[, "party"][, height]). :SetProgress(current, total).
 ---Track and fill have rounded ends. Steps show as ticks (2 to 20 steps; more would be noise).
 ---:SetMarker(ratio or nil[, colour]) adds a round dot, e.g. a party member's progress.
 ---The party variant is a dimmer accent, for other players' progress next to yours.
-local MAX_TICKS = 20
-
 function UI.Bar(parent, kind, height)
   local h = height or 5
   local f = CreateFrame("Frame", nil, parent)
@@ -514,7 +592,7 @@ function UI.Bar(parent, kind, height)
   f.outline = pill(f, h, "BACKGROUND", -1, -1)
   f.outline:SetColor({ 0, 0, 0 }, .9)
   f.track = pill(f, h, "BACKGROUND", 0)
-  f.track:SetColor({ .165, .137, .102 })
+  f.track:SetColor(C.track)
   -- the fill: its own frame with a pill, so both ends are round at any width
   f.fillFrame = CreateFrame("Frame", nil, f)
   f.fillFrame:SetPoint("TOPLEFT")
@@ -533,50 +611,25 @@ function UI.Bar(parent, kind, height)
   f.kind = kind
   f.ratio, f.steps = 0, 0
   function f:Paint()
-    local c = self.kind == "party" and UI.Mix(self.accent, { .53, .53, .53 }, .55) or self.accent
+    local c = self.kind == "party" and UI.Mix(self.accent, PARTY_GREY, PARTY_GREY_SHARE) or self.accent
     self.fill:SetColor(c)
     self.over:SetFrameLevel(self.fillFrame:GetFrameLevel() + 1)   -- the lines stay over the fill
     local width = self:GetWidth() or 0
-    local w = width * self.ratio
     -- never narrower than its round ends
-    self.fillFrame:SetWidth(math.max(w, h))
+    self.fillFrame:SetWidth(math.max(width * self.ratio, h))
     self.fillFrame:SetShown(self.ratio > 0)
-    local n = (self.steps >= 2 and self.steps <= MAX_TICKS) and self.steps or 0
-    for i = 1, math.max(n - 1, #self.ticks) do
-      local t = self.ticks[i]
-      if i < n then
-        if not t then
-          t = self.over:CreateTexture(nil, "OVERLAY", nil, 1)
-          t:SetColorTexture(0, 0, 0, .55)
-          t:SetSize(1, h)
-          self.ticks[i] = t
-        end
-        t:ClearAllPoints()
-        t:SetPoint("CENTER", self, "LEFT", width * i / n, 0)
-        t:Show()
-      elseif t then
-        t:Hide()
-      end
-    end
-    if self.markerRatio then
-      self.marker:ClearAllPoints()
-      self.marker:SetPoint("CENTER", self, "LEFT", width * self.markerRatio, 0)
-      local mc = self.markerColor or { .78, .78, .78 }
-      self.marker:SetVertexColor(mc[1], mc[2], mc[3], 1)
-      self.marker:Show()
-    else
-      self.marker:Hide()
-    end
+    paintTicks(self, width, h)
+    paintMarker(self, width)
   end
-  function f:ApplyAccent(c) self.accent = c self:Paint() end
+  f.ApplyAccent = applyAccent
   function f:SetProgress(current, total)
     self.ratio = (total and total > 0) and math.max(0, math.min(1, (current or 0) / total)) or 0
     self.steps = total or 0
     self:Paint()
   end
-  function f:SetMarker(ratio, color)
+  function f:SetMarker(ratio, markerColor)
     self.markerRatio = ratio and math.max(0, math.min(1, ratio)) or nil
-    self.markerColor = color
+    self.markerColor = markerColor
     self:Paint()
   end
   f:SetScript("OnSizeChanged", f.Paint)
@@ -603,9 +656,66 @@ end
 -- ends exactly (end segments get rounded highlight caps).
 -------------------------------------------------------------------------------------------
 
+-- The highlight behind a segment: rounded on the pill's outer ends, square between segments.
+-- b.hl holds every part; b.mid is the middle (a solid colour, where the caps are tinted textures).
+local function addSegmentHighlight(b, inner, first, last)
+  b.hl = {}
+  local function cap(texLeft, texRight)
+    local t = b:CreateTexture(nil, "ARTWORK")
+    t:SetTexture(TEX.circle)
+    t:SetTexCoord(texLeft, texRight, 0, 1)
+    t:SetSize(inner / 2, inner)
+    b.hl[#b.hl + 1] = t
+    return t
+  end
+  local leftCap = first and cap(0, .5)
+  local rightCap = last and cap(.5, 1)
+  if leftCap then leftCap:SetPoint("LEFT") end
+  if rightCap then rightCap:SetPoint("RIGHT") end
+  local mid = b:CreateTexture(nil, "ARTWORK")
+  mid:SetColorTexture(1, 1, 1, 1)
+  mid:SetPoint("TOPLEFT", leftCap or b, leftCap and "TOPRIGHT" or "TOPLEFT")
+  mid:SetPoint("BOTTOMRIGHT", rightCap or b, rightCap and "BOTTOMLEFT" or "BOTTOMRIGHT")
+  b.mid = mid
+  b.hl[#b.hl + 1] = mid
+end
+
+local function newSegment(seg, item, inner, first, last)
+  local b = CreateFrame("Button", nil, seg)
+  b.key, b.tip = item.key, item.tip
+  if item.icon then
+    b.icon = UI.Icon(b, item.icon, inner - 5, C.muted, "OVERLAY")
+    b.icon:SetPoint("CENTER")
+    b:SetSize(inner + 6, inner)
+  else
+    b.text = UI.Text(b, "body", 12, C.muted, "OVERLAY")
+    b.text:SetPoint("CENTER")
+    b.text:SetJustifyH("CENTER")
+    b.text:SetText(item.label)
+    b:SetSize(math.floor(b.text:GetStringWidth() + 16), inner)
+  end
+  addSegmentHighlight(b, inner, first, last)
+  b:SetScript("OnClick", function(self) seg:Select(self.key) end)
+  b:SetScript("OnEnter", function(self)
+    self.hover = true
+    seg:Paint()
+    if self.tip then
+      GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+      GameTooltip:AddLine(self.tip, 1, 1, 1)
+      GameTooltip:Show()
+    end
+  end)
+  b:SetScript("OnLeave", function(self)
+    self.hover = false
+    seg:Paint()
+    GameTooltip:Hide()
+  end)
+  return b
+end
+
 ---UI.Segmented(parent, items, onSelect[, height]). items = { {key = "near", label = "Nearest"} |
 ---{key = "compact", icon = "viewCompact", tip = "Compact view"} }. :Select(key, silent),
----:GetSelected(), .buttons. Follows the window accent (or opts via :ApplyAccent).
+---:GetSelected(), .buttons. Follows the window accent.
 function UI.Segmented(parent, items, onSelect, height)
   local h = height or 18
   local inner = h - 2
@@ -618,57 +728,9 @@ function UI.Segmented(parent, items, onSelect, height)
   seg.buttons = {}
   local x = 1
   for i, item in ipairs(items) do
-    local b = CreateFrame("Button", nil, seg)
-    b.key, b.tip = item.key, item.tip
-    if item.icon then
-      b.icon = UI.Icon(b, item.icon, inner - 5, C.muted, "OVERLAY")
-      b.icon:SetPoint("CENTER")
-      b:SetSize(inner + 6, inner)
-    else
-      b.text = UI.Text(b, "body", 12, C.muted, "OVERLAY")
-      b.text:SetPoint("CENTER")
-      b.text:SetJustifyH("CENTER")
-      b.text:SetText(item.label)
-      b:SetSize(math.floor(b.text:GetStringWidth() + 16), inner)
-    end
+    local b = newSegment(seg, item, inner, i == 1, i == #items)
     b:SetPoint("LEFT", seg, "LEFT", x, 0)
     x = x + b:GetWidth()
-    -- the highlight: rounded on the pill's outer ends, square between segments
-    local first, last = i == 1, i == #items
-    b.hl = {}
-    local function part(l, r)
-      local t = b:CreateTexture(nil, "ARTWORK")
-      t:SetTexture(TEX.circle)
-      t:SetTexCoord(l, r, 0, 1)
-      t:SetSize(inner / 2, inner)
-      b.hl[#b.hl + 1] = t
-      return t
-    end
-    local leftCap = first and part(0, .5)
-    local rightCap = last and part(.5, 1)
-    if leftCap then leftCap:SetPoint("LEFT") end
-    if rightCap then rightCap:SetPoint("RIGHT") end
-    local mid = b:CreateTexture(nil, "ARTWORK")
-    mid:SetColorTexture(1, 1, 1, 1)
-    mid:SetPoint("TOPLEFT", leftCap or b, leftCap and "TOPRIGHT" or "TOPLEFT")
-    mid:SetPoint("BOTTOMRIGHT", rightCap or b, rightCap and "BOTTOMLEFT" or "BOTTOMRIGHT")
-    b.mid = mid
-    b.hl[#b.hl + 1] = mid
-    b:SetScript("OnClick", function(self) seg:Select(self.key) end)
-    b:SetScript("OnEnter", function(self)
-      self.hover = true
-      seg:Paint()
-      if self.tip then
-        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
-        GameTooltip:AddLine(self.tip, 1, 1, 1)
-        GameTooltip:Show()
-      end
-    end)
-    b:SetScript("OnLeave", function(self)
-      self.hover = false
-      seg:Paint()
-      GameTooltip:Hide()
-    end)
     seg.buttons[i] = b
   end
   seg:SetWidth(x + 1)
@@ -678,15 +740,20 @@ function UI.Segmented(parent, items, onSelect, height)
     local a = self.accent
     for _, b in ipairs(self.buttons) do
       local on = b.key == self.selected
+      local alpha = on and .3 or 0
       for _, t in ipairs(b.hl) do
-        if t == b.mid then t:SetColorTexture(a[1], a[2], a[3], on and .3 or 0) else t:SetVertexColor(a[1], a[2], a[3], on and .3 or 0) end
+        if t == b.mid then
+          t:SetColorTexture(a[1], a[2], a[3], alpha)
+        else
+          t:SetVertexColor(a[1], a[2], a[3], alpha)
+        end
       end
-      local tc = on and { 1, 1, 1 } or (b.hover and C.text or C.muted)
+      local tc = on and WHITE or (b.hover and C.text or C.muted)
       if b.text then b.text:SetTextColor(tc[1], tc[2], tc[3]) end
       if b.icon then b.icon:SetVertexColor(tc[1], tc[2], tc[3]) end
     end
   end
-  function seg:ApplyAccent(c) self.accent = c self:Paint() end
+  seg.ApplyAccent = applyAccent
   function seg:Select(key, silent)
     self.selected = key
     self:Paint()
@@ -726,16 +793,18 @@ end
 -- Window: the one container every suite addon uses
 -------------------------------------------------------------------------------------------
 
-local function savePosition(f)
+---Remembers where a frame is, under key (NorgannonCoreDB.windows[key]).
+function UI.SavePosition(f, key)
   local db = Core.db
-  if not (db and f.saveKey) then return end
+  if not (db and key) then return end
   local point, _, relativePoint, x, y = f:GetPoint()
-  db.windows[f.saveKey] = { point = point, relativePoint = relativePoint, x = x, y = y }
+  db.windows[key] = { point = point, relativePoint = relativePoint, x = x, y = y }
 end
 
-local function restorePosition(f)
+---Puts a frame back where UI.SavePosition left it; a frame never saved stays where it is.
+function UI.RestorePosition(f, key)
   local db = Core.db
-  local saved = db and f.saveKey and db.windows[f.saveKey]
+  local saved = db and key and db.windows[key]
   if saved and saved.point then
     f:ClearAllPoints()
     f:SetPoint(saved.point, UIParent, saved.relativePoint or saved.point, saved.x or 0, saved.y or 0)
@@ -744,7 +813,8 @@ end
 
 ---A suite window. opts = { name = "GlobalName", addon = "clairvoyance", title = "Clairvoyance",
 ---sub = "Durotar", width, height, footer = true }. Fields: .header .body .footer .footerText.
----Methods: :SetAccent(addonKey), :SetSub(text). Esc closes it; its position is remembered.
+---Methods: :SetAccent(addonKey), :SetTitle(text), :SetSub(text). Esc closes it; its position is
+---remembered. An addon can set .locked to stop the header dragging it.
 function UI.Window(opts)
   local f = CreateFrame("Frame", opts.name, opts.parent or UIParent)
   f:SetSize(opts.width or 640, opts.height or 440)
@@ -811,7 +881,10 @@ function UI.Window(opts)
   header:EnableMouse(true)
   header:RegisterForDrag("LeftButton")
   header:SetScript("OnDragStart", function() if not f.locked then f:StartMoving() end end)
-  header:SetScript("OnDragStop", function() f:StopMovingOrSizing() savePosition(f) end)
+  header:SetScript("OnDragStop", function()
+    f:StopMovingOrSizing()
+    UI.SavePosition(f, f.saveKey)
+  end)
 
   -- footer and body
   if opts.footer then
@@ -845,7 +918,7 @@ function UI.Window(opts)
 
   if opts.name then
     table.insert(UISpecialFrames, opts.name)
-    Core:OnReady(function() restorePosition(f) end)
+    Core:OnReady(function() UI.RestorePosition(f, f.saveKey) end)
   end
   f:SetAccent(opts.addon or "norgannondb")
   f:Hide()
