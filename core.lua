@@ -29,6 +29,8 @@ end
 -- Calling other addons' code: an error in one listener must not stop the others
 -------------------------------------------------------------------------------------------
 
+-- securecallfunction hands an error to the error handler and carries on, so a broken listener
+-- can't take the rest down with it (nor taint the caller). The plain call is for a client without it.
 local function call(fn, ...)
   if securecallfunction then return securecallfunction(fn, ...) end
   return fn(...)
@@ -52,6 +54,7 @@ end
 function Core:On(event, owner, fn)
   if not validEvent(event) then return false end
   if not handlers[event] then
+    -- RegisterEvent throws on an event the client doesn't have
     if not pcall(eventFrame.RegisterEvent, eventFrame, event) then return false end
     handlers[event] = {}
   end
@@ -121,7 +124,7 @@ Core:On("ADDON_LOADED", Core, function(_, name)
   local saved = rawget(_G, "NorgannonCoreDB")   -- nil on the first run
   local db = type(saved) == "table" and saved or {}
   for key, value in pairs(DEFAULTS) do
-    if db[key] == nil then db[key] = type(value) == "table" and {} or value end
+    if db[key] == nil then db[key] = type(value) == "table" and {} or value end   -- never share DEFAULTS' tables
   end
   NorgannonCoreDB, Core.db = db, db
   isReady = true
@@ -154,8 +157,9 @@ local LOG_SIZE = 300
 function Core:Debug(source, fmt, ...)
   local db = self.db
   if not db or not db.debug then return end
-  local ok, text = pcall(string.format, fmt, ...)
+  local ok, text = pcall(string.format, fmt, ...)   -- a bad format must not break the caller: log it raw
   local log = db.debugLog
-  table.insert(log, string.format("%s %s: %s", date and date("%H:%M:%S") or "", tostring(source), ok and text or fmt))
+  local clock = date and date("%H:%M:%S") or ""
+  table.insert(log, string.format("%s %s: %s", clock, tostring(source), ok and text or fmt))
   while #log > LOG_SIZE do table.remove(log, 1) end
 end
