@@ -399,12 +399,18 @@ function Comms:SendQuestRemove(questId)
   end
 end
 
+-- Stands in for an objective we can't read (secret type): the v2 layout is positional, so a gap
+-- would misplace every objective after it, and the peer would misread the rest of the block.
+local UNREADABLE_OBJECTIVE = { typ = "o", ful = 0, req = 1 }
+
 -- one quest in the v2 flat layout: questId, n, (id, typeByte, fulfilled, required) x n
 local function flatQuest(questId)
   local objectives = localObjectives(questId)
-  if not (objectives and objectives[1]) then return nil end
-  local entry = { questId, #objectives }
-  for _, o in ipairs(objectives) do
+  if not (objectives and next(objectives)) then return nil end
+  local count = #Core.Player:GetQuest(questId).objectives
+  local entry = { questId, count }
+  for i = 1, count do
+    local o = objectives[i] or UNREADABLE_OBJECTIVE
     entry[#entry + 1] = o.id or 0
     entry[#entry + 1] = byte(o.typ)
     entry[#entry + 1] = o.ful
