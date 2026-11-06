@@ -56,7 +56,9 @@ function Player.ObjectiveName(text, objectiveType)
     end
   end
   -- no format to go by: the counter last (with a colon, or CJK's full-width one) or first
-  local name = string.match(text, "^(.-)%s*[:：]%s*%d+%s*/%s*%d+$")
+  -- (the full-width colon is several bytes, so it can't go in a [:：] class with the plain one)
+  local name = string.match(text, "^(.-)%s*:%s*%d+%s*/%s*%d+$")
+    or string.match(text, "^(.-)%s*：%s*%d+%s*/%s*%d+$")
     or string.match(text, "^%d+%s*/%s*%d+%s+(.+)$")
   return strtrim(name or text)
 end
