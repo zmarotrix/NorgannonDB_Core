@@ -260,8 +260,7 @@ function Compass:Update(dt)
     sinceNearest = 0
     collectTargets(px, py, instance)
   end
-  local db = Core.db
-  if #targets == 0 and not (db and db.compass and db.compass.alwaysShow) then
+  if #targets == 0 and not Compass.alwaysShow then
     f:Hide()
     fade = 0
     return
@@ -344,7 +343,7 @@ function Compass:SetMovable(on)
   end
   moveHint:SetShown(on)
   moveGlow:SetShown(on)
-  settings().alwaysShow = on or nil   -- visible while placing it
+  self.alwaysShow = on or nil   -- visible while placing it; not saved, so a /reload can't strand it
   self.moving = on
   sinceNearest = NEAREST_EVERY
   self:Update(0)
@@ -366,6 +365,7 @@ function Compass:ResetPosition()
 end
 
 Core:OnLogin(function()
+  settings().alwaysShow = nil   -- an older version saved this while moving
   f:SetScale(Compass:GetSize())
   UI.RestorePosition(f, "NorgannonCoreCompass")
 end)
