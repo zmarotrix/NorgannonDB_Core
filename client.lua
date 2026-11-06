@@ -55,6 +55,33 @@ Core:On("PLAYER_REGEN_ENABLED", "combatQueue", function()
 end)
 
 -------------------------------------------------------------------------------------------
+-- Minimap shapes: which quadrants of the minimap are round, for the map layer and the buttons
+-------------------------------------------------------------------------------------------
+
+local MINIMAP_SHAPES = {
+  -- { upper-left, lower-left, upper-right, lower-right }
+  ["SQUARE"] = { false, false, false, false },
+  ["CORNER-TOPLEFT"] = { true, false, false, false }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
+  ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { false, false, false, true },
+  ["SIDE-LEFT"] = { true, true, false, false }, ["SIDE-RIGHT"] = { false, false, true, true },
+  ["SIDE-TOP"] = { true, false, true, false }, ["SIDE-BOTTOM"] = { false, true, false, true },
+  ["TRICORNER-TOPLEFT"] = { true, true, true, false }, ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
+  ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true }, ["TRICORNER-BOTTOMRIGHT"] = { false, true, true, true },
+}
+
+---The minimap's shape for Core.IsMinimapRoundAt, or nil for a plain round minimap.
+function Core.MinimapShape()
+  return GetMinimapShape and MINIMAP_SHAPES[GetMinimapShape() or "ROUND"]
+end
+
+---Whether a shape is round at a point (x right, y up, from the minimap's centre).
+function Core.IsMinimapRoundAt(shape, x, y)
+  local column = x < 0 and 1 or 3
+  if y > 0 then return shape[column] end
+  return shape[column + 1]
+end
+
+-------------------------------------------------------------------------------------------
 -- Next frame
 -------------------------------------------------------------------------------------------
 

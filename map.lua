@@ -610,17 +610,6 @@ end
 -- Minimap (world coordinates: handles zoom, rotation, indoor maps and minimap shapes)
 -------------------------------------------------------------------------------------------
 
-local SHAPES = {
-  -- { upper-left, lower-left, upper-right, lower-right } quadrants that are round
-  ["SQUARE"] = { false, false, false, false },
-  ["CORNER-TOPLEFT"] = { true, false, false, false }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
-  ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { false, false, false, true },
-  ["SIDE-LEFT"] = { true, true, false, false }, ["SIDE-RIGHT"] = { false, false, true, true },
-  ["SIDE-TOP"] = { true, false, true, false }, ["SIDE-BOTTOM"] = { false, true, false, true },
-  ["TRICORNER-TOPLEFT"] = { true, true, true, false }, ["TRICORNER-TOPRIGHT"] = { true, false, true, true },
-  ["TRICORNER-BOTTOMLEFT"] = { true, true, false, true }, ["TRICORNER-BOTTOMRIGHT"] = { false, true, true, true },
-}
-
 local miniPins = {}
 local view = {}   -- the player and the minimap for this refresh; filled by prepareMinimap
 
@@ -635,7 +624,7 @@ local function prepareMinimap()
   view.radius = (C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius())
     or (Minimap.GetViewRadius and Minimap:GetViewRadius()) or 150
   view.halfw, view.halfh = Minimap:GetWidth() / 2, Minimap:GetHeight() / 2
-  view.shape = GetMinimapShape and SHAPES[GetMinimapShape() or "ROUND"]   -- no entry for plain round
+  view.shape = Core.MinimapShape()
   return true
 end
 
@@ -651,11 +640,7 @@ local function minimapOffset(pin, margin)
   local x, y = east / view.radius * view.halfw, north / view.radius * view.halfh
   local distance = math.sqrt(x * x + y * y)
   local round = true
-  if view.shape and x ~= 0 and y ~= 0 then
-    -- quadrants: { upper-left, lower-left, upper-right, lower-right }
-    local q = x < 0 and 1 or 3
-    round = y > 0 and view.shape[q] or view.shape[q + 1]
-  end
+  if view.shape and x ~= 0 and y ~= 0 then round = Core.IsMinimapRoundAt(view.shape, x, y) end
   local inside
   if round then
     inside = distance + margin < view.halfw

@@ -19,19 +19,6 @@ local RING_GAP = 10      -- pixels between the minimap's edge and a button's cen
 local DEFAULT_ANGLE = 225
 local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, retrospect = 250, archivum = 275 }
 
--- Which quadrants of the minimap are round, in the order MB.Offset counts them:
--- { lower-right, lower-left, upper-right, upper-left }. (Map's table of the same shapes has
--- another order, to suit its own lookup.)
-local SHAPES = {
-  ["ROUND"] = { true, true, true, true }, ["SQUARE"] = { false, false, false, false },
-  ["CORNER-TOPLEFT"] = { false, false, false, true }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
-  ["CORNER-BOTTOMLEFT"] = { false, true, false, false }, ["CORNER-BOTTOMRIGHT"] = { true, false, false, false },
-  ["SIDE-LEFT"] = { false, true, false, true }, ["SIDE-RIGHT"] = { true, false, true, false },
-  ["SIDE-TOP"] = { false, false, true, true }, ["SIDE-BOTTOM"] = { true, true, false, false },
-  ["TRICORNER-TOPLEFT"] = { false, true, true, true }, ["TRICORNER-TOPRIGHT"] = { true, true, false, true },
-  ["TRICORNER-BOTTOMLEFT"] = { true, false, true, true }, ["TRICORNER-BOTTOMRIGHT"] = { true, true, true, false },
-}
-
 local function settings(key)
   local db = Core.db
   if not db then return {} end
@@ -45,13 +32,10 @@ end
 function MB.Offset(angle)
   local a = math.rad(angle)
   local x, y = math.cos(a), math.sin(a)
-  local quadrant = 1
-  if x < 0 then quadrant = quadrant + 1 end
-  if y > 0 then quadrant = quadrant + 2 end
-  local shape = SHAPES[GetMinimapShape and GetMinimapShape() or "ROUND"] or SHAPES.ROUND
+  local shape = Core.MinimapShape()
   local w = (Minimap:GetWidth() or 140) / 2 + RING_GAP
   local h = (Minimap:GetHeight() or 140) / 2 + RING_GAP
-  if shape[quadrant] then
+  if not shape or Core.IsMinimapRoundAt(shape, x, y) then
     return x * w, y * h
   end
   -- a square corner: push out along the angle as far as a corner reaches, then clamp to the sides
