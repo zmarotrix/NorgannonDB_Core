@@ -5,6 +5,7 @@
 --     createRow = function(row, content) row.text = UI.Text(content, "body", 14) ... end,
 --     updateRow = function(row, item, index) row.text:SetText(item.name) end,
 --     onClick = function(item, index, button) end,
+--     onEnter = function(row, item, index) end, onLeave = function(row, item, index) end,
 --     onGroupClick = function(group, index, button) end,       -- a section header clicked (to fold it)
 --     groupBand = true })                                        -- headers on a faint band with a rule
 --   list:SetData(items)
@@ -16,7 +17,10 @@ local Core = NorgannonCore
 local UI = Core.UI
 local C = UI.C
 
-local SCROLLBAR = 6
+local SCROLLBAR = 6         -- width of the track and the thumb
+local TRACK_INSET = 2       -- the track's gap to the list's top and bottom
+local MIN_THUMB = 24
+local WHEEL_ROWS = 3        -- rows per mouse wheel step
 
 function UI.List(parent, opts)
   local f = CreateFrame("Frame", nil, parent)
@@ -30,8 +34,8 @@ function UI.List(parent, opts)
 
   -- scrollbar
   f.track = UI.Tex(f, "ARTWORK", 0, { 1, 1, 1, .04 })
-  f.track:SetPoint("TOPRIGHT", -1, -2)
-  f.track:SetPoint("BOTTOMRIGHT", -1, 2)
+  f.track:SetPoint("TOPRIGHT", -1, -TRACK_INSET)
+  f.track:SetPoint("BOTTOMRIGHT", -1, TRACK_INSET)
   f.track:SetWidth(SCROLLBAR)
   f.thumb = CreateFrame("Frame", nil, f)
   f.thumb:SetWidth(SCROLLBAR)
@@ -80,10 +84,14 @@ function UI.List(parent, opts)
       row.groupLabel:SetWordWrap(false)
     end
     row:SetScript("OnEnter", function(self)
-      if self.item and self.item.group and opts.onGroupClick then self.hl:Show() return end   -- a header to fold
-      if not self.item or self.item.group then return end
+      local item = self.item
+      if not item then return end
+      if item.group then
+        if opts.onGroupClick then self.hl:Show() end   -- a header to fold
+        return
+      end
       self.hl:Show()
-      if opts.onEnter and self.item then opts.onEnter(self, self.item, self.index) end
+      if opts.onEnter then opts.onEnter(self, item, self.index) end
     end)
     row:SetScript("OnLeave", function(self)
       self.hl:Hide()
@@ -99,6 +107,46 @@ function UI.List(parent, opts)
     end)
     if opts.createRow then opts.createRow(row, row.content) end
     return row
+  end
+
+  -- one visible row: the item's content, or a section header, in the current accent
+  local function drawRow(row, item, index)
+    row.item, row.index = item, index
+    local a = f.accent
+    UI.GradientH(row.hl, a, .14)
+    UI.GradientH(row.sel, a, .26)
+    row.bar:SetColorTexture(a[1], a[2], a[3], 1)
+    if row.band then
+      row.band:SetShown(item.group ~= nil)
+      row.rule:SetShown(item.group ~= nil)
+    end
+    if item.group then
+      row.groupLabel:SetText(item.group)
+      row.groupLabel:Show()
+      row.content:Hide()
+      row.sel:Hide()
+      row.bar:Hide()
+      row.hl:Hide()
+    else
+      local selected = f.selected ~= nil and f.selected == item
+      row.groupLabel:Hide()
+      row.content:Show()
+      row.sel:SetShown(selected)
+      row.bar:SetShown(selected)
+      if opts.updateRow then opts.updateRow(row, item, index) end
+    end
+    row:Show()
+  end
+
+  local function drawScrollbar(h)
+    local trackH = h - TRACK_INSET * 2
+    local thumbH = math.max(MIN_THUMB, trackH * h / contentHeight())
+    local ratio = maxOffset() > 0 and f.offset / maxOffset() or 0
+    f.thumb:SetHeight(thumbH)
+    f.thumb:ClearAllPoints()
+    f.thumb:SetPoint("TOPRIGHT", -1, -TRACK_INSET - (trackH - thumbH) * ratio)
+    local c = f.thumbHover and f.accent or C.lineStrong
+    f.thumb.tex:SetColorTexture(c[1], c[2], c[3], 1)
   end
 
   function f:Refresh()
@@ -124,31 +172,7 @@ function UI.List(parent, opts)
       row:SetPoint("TOPLEFT", 0, top)
       row:SetPoint("TOPRIGHT", scrollable and -(SCROLLBAR + 4) or 0, top)
       if item then
-        row.item, row.index = item, index
-        local a = self.accent
-        UI.GradientH(row.hl, a, .14)
-        UI.GradientH(row.sel, a, .26)
-        row.bar:SetColorTexture(a[1], a[2], a[3], 1)
-        if row.band then
-          row.band:SetShown(item.group ~= nil)
-          row.rule:SetShown(item.group ~= nil)
-        end
-        if item.group then
-          row.groupLabel:SetText(item.group)
-          row.groupLabel:Show()
-          row.content:Hide()
-          row.sel:Hide()
-          row.bar:Hide()
-          row.hl:Hide()
-        else
-          local selected = self.selected ~= nil and self.selected == item
-          row.groupLabel:Hide()
-          row.content:Show()
-          row.sel:SetShown(selected)
-          row.bar:SetShown(selected)
-          if opts.updateRow then opts.updateRow(row, item, index) end
-        end
-        row:Show()
+        drawRow(row, item, index)
       else
         row.item, row.index = nil, nil
         row:Hide()
@@ -158,16 +182,7 @@ function UI.List(parent, opts)
 
     self.track:SetShown(scrollable)
     self.thumb:SetShown(scrollable)
-    if scrollable then
-      local trackH = h - 4
-      local thumbH = math.max(24, trackH * h / contentHeight())
-      local ratio = maxOffset() > 0 and self.offset / maxOffset() or 0
-      self.thumb:SetHeight(thumbH)
-      self.thumb:ClearAllPoints()
-      self.thumb:SetPoint("TOPRIGHT", -1, -2 - (trackH - thumbH) * ratio)
-      local c = self.thumbHover and self.accent or C.lineStrong
-      self.thumb.tex:SetColorTexture(c[1], c[2], c[3], 1)
-    end
+    if scrollable then drawScrollbar(h) end
   end
 
   function f:SetData(items, keepOffset)
@@ -202,13 +217,19 @@ function UI.List(parent, opts)
   end
 
   f:SetScript("OnMouseWheel", function(self, delta)
-    self:SetOffset(self.offset - delta * self.rowHeight * 3)
+    self:SetOffset(self.offset - delta * self.rowHeight * WHEEL_ROWS)
   end)
   f:SetScript("OnSizeChanged", function(self) self:Refresh() end)
 
   -- thumb dragging
-  f.thumb:SetScript("OnEnter", function() f.thumbHover = true f:Refresh() end)
-  f.thumb:SetScript("OnLeave", function() f.thumbHover = false f:Refresh() end)
+  f.thumb:SetScript("OnEnter", function()
+    f.thumbHover = true
+    f:Refresh()
+  end)
+  f.thumb:SetScript("OnLeave", function()
+    f.thumbHover = false
+    f:Refresh()
+  end)
   f.thumb:SetScript("OnMouseDown", function(self)
     local _, y = GetCursorPosition()
     self.dragFrom = y / f:GetEffectiveScale()
@@ -216,17 +237,16 @@ function UI.List(parent, opts)
     self:SetScript("OnUpdate", function(thumb)
       local _, cy = GetCursorPosition()
       cy = cy / f:GetEffectiveScale()
-      local trackH = (f:GetHeight() or 0) - 4 - thumb:GetHeight()
-      if trackH > 0 then
-        f:SetOffset(thumb.dragOffset + (thumb.dragFrom - cy) / trackH * maxOffset())
+      local travel = (f:GetHeight() or 0) - TRACK_INSET * 2 - thumb:GetHeight()   -- how far the thumb can move
+      if travel > 0 then
+        f:SetOffset(thumb.dragOffset + (thumb.dragFrom - cy) / travel * maxOffset())
       end
     end)
   end)
   f.thumb:SetScript("OnMouseUp", function(self) self:SetScript("OnUpdate", nil) end)
 
   -- follow the window accent like the other widgets
-  local window = parent
-  while window and not window._norgWindow do window = window:GetParent() end
+  local window = UI.WindowOf(parent)
   if window then
     table.insert(window._accentWidgets, f)
     f.accent = window.accent or C.goldSoft

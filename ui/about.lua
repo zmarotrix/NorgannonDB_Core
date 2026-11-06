@@ -99,10 +99,15 @@ local function build()
         .. "makes the database more accurate for everyone.")
       self.action:Hide()
     end
-    -- size to the text
-    local h = 14 + 36 + 12 + (self.about:GetStringHeight() or 60) + 12 + 1 + 12 + 28 + 8
-      + (self.ctext:GetStringHeight() or 60) + (self.action:IsShown() and 34 or 0) + 34
-    self:SetHeight(math.floor(h))
+    -- size to the text: the anchors above, top to bottom
+    local head = 14 + 36 + 12                                        -- margin, mark, gap
+    local aboutText = self.about:GetStringHeight() or 60
+    local rule = 12 + 1 + 12
+    local collectorHead = 28 + 8                                     -- its mark, gap
+    local collectorText = self.ctext:GetStringHeight() or 60
+    local action = self.action:IsShown() and 34 or 0                 -- gap, button
+    local foot = 34                                                  -- the credit line and margins
+    self:SetHeight(math.floor(head + aboutText + rule + collectorHead + collectorText + action + foot))
   end
 
   table.insert(UISpecialFrames, "NorgannonCoreAbout")
