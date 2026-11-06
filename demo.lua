@@ -1,6 +1,6 @@
 -- /norg demo: a preview of the map layer, minimap, compass and arrow with your real quest log,
--- built from NorgannonDB. It is a test bench for Phase 2c, not Clairvoyance: Clairvoyance v1
--- will own quest pins, availability rules and settings.
+-- built from NorgannonDB. It is a test bench for the Core, not a quest helper: Clairvoyance owns
+-- quest pins, availability rules and settings.
 
 local Core = NorgannonCore
 local UI = Core.UI
@@ -8,14 +8,12 @@ local C = UI.C
 
 local MAX_SOURCES = 4   -- an item objective shows its most likely droppers only
 
-local function spawnsOf(kind, id)
-  local record = NorgannonDB:Get(kind, id)
-  return record and record.spawns, record and NorgannonDB.L and NorgannonDB:L(kind, id, "name") or (record and record.name)
-end
-
+-- one pin per spawn of an NPC or object; spec holds what they share
 local function addSpawns(pins, kind, id, spec)
-  local spawns, name = spawnsOf(kind, id)
-  for area, points in pairs(spawns or {}) do
+  local record = NorgannonDB:Get(kind, id)
+  if not record then return end
+  local name = NorgannonDB.L and NorgannonDB:L(kind, id, "name") or record.name
+  for area, points in pairs(record.spawns or {}) do
     for _, p in ipairs(points) do
       pins[#pins + 1] = {
         area = area, x = p[1], y = p[2], icon = spec.icon or "pin", color = spec.color, layer = spec.layer or 3,
@@ -51,43 +49,69 @@ local function tooltipFor(questTitle, color, line)
   end
 end
 
-local function questPins(pins)
-  local Player = Core.Player
-  for i, id in ipairs(Player:QuestIds()) do
-    local entry = Player:GetQuest(id)
-    local q = NorgannonDB:Get("quests", id)
-    local color = id   -- tooltips read the quest's colour live
-    if q and entry then
-      for oi, o in ipairs(entry.objectives) do
-        if not o.finished then
-          local kind, objective = objectiveEntry(q, oi)
-          local spec = { quest = id, group = "q" .. id .. ":" .. oi, compass = true,
-            tooltip = tooltipFor(entry.title or q.name, color, o.text) }
-          if objective and (kind == "npcs" or kind == "objects") then
-            addSpawns(pins, kind, objective.id, spec)
-          elseif objective and kind == "items" then
-            local info = Core.DB:ItemInfo(objective.id)
-            local sources = {}
-            for npc, chance in pairs(info and info.drops.npcs or {}) do sources[#sources + 1] = { "npcs", npc, chance } end
-            for obj, chance in pairs(info and info.drops.objects or {}) do sources[#sources + 1] = { "objects", obj, chance } end
-            table.sort(sources, function(a, b) return (a[3] or 0) > (b[3] or 0) end)
-            for s = 1, math.min(MAX_SOURCES, #sources) do addSpawns(pins, sources[s][1], sources[s][2], spec) end
-          end
-        end
-      end
-      -- turn-in: gold "?" when complete (on the compass), grey while objectives remain
-      local complete = entry.complete == true
-      for _, npc in ipairs(q.finishers and q.finishers.npcs or {}) do
-        addSpawns(pins, "npcs", npc, { icon = complete and "question" or "questionGrey", layer = 5, size = 16,
-          group = "end" .. id, compass = complete, quest = id,
-          tooltip = tooltipFor(entry.title or q.name, color, complete and "Ready to turn in" or "Turn in here when done") })
+-- an item objective: pins on the most likely sources of the item
+local function addItemSources(pins, itemId, spec)
+  local info = Core.DB:ItemInfo(itemId)
+  local sources = {}
+  for npc, chance in pairs(info and info.drops.npcs or {}) do sources[#sources + 1] = { "npcs", npc, chance } end
+  for obj, chance in pairs(info and info.drops.objects or {}) do sources[#sources + 1] = { "objects", obj, chance } end
+  table.sort(sources, function(a, b) return (a[3] or 0) > (b[3] or 0) end)
+  for s = 1, math.min(MAX_SOURCES, #sources) do addSpawns(pins, sources[s][1], sources[s][2], spec) end
+end
+
+local function addObjectivePins(pins, id, q, entry)
+  for index, o in ipairs(entry.objectives) do
+    if not o.finished then
+      local kind, objective = objectiveEntry(q, index)
+      local spec = { quest = id, group = "q" .. id .. ":" .. index, compass = true,
+        tooltip = tooltipFor(entry.title or q.name, id, o.text) }
+      if objective and (kind == "npcs" or kind == "objects") then
+        addSpawns(pins, kind, objective.id, spec)
+      elseif objective and kind == "items" then
+        addItemSources(pins, objective.id, spec)
       end
     end
   end
 end
 
--- a quick availability check for quests that start in the player's zone (Clairvoyance v1 will
--- do this properly: exclusivity, breadcrumbs, reputation, skills, events)
+-- turn-in: gold "?" when complete (on the compass), grey while objectives remain
+local function addTurnInPins(pins, id, q, entry)
+  local complete = entry.complete == true
+  for _, npc in ipairs(q.finishers and q.finishers.npcs or {}) do
+    addSpawns(pins, "npcs", npc, { icon = complete and "question" or "questionGrey", layer = 5, size = 16,
+      group = "end" .. id, compass = complete, quest = id,
+      tooltip = tooltipFor(entry.title or q.name, id, complete and "Ready to turn in" or "Turn in here when done") })
+  end
+end
+
+local function questPins(pins)
+  local Player = Core.Player
+  for _, id in ipairs(Player:QuestIds()) do
+    local entry = Player:GetQuest(id)
+    local q = NorgannonDB:Get("quests", id)
+    if q and entry then
+      addObjectivePins(pins, id, q, entry)
+      addTurnInPins(pins, id, q, entry)
+    end
+  end
+end
+
+local function prerequisitesDone(pre)
+  local Player = Core.Player
+  for _, id in ipairs(pre.all or {}) do
+    if not Player:IsCompleted(id) then return false end
+  end
+  if pre.any and #pre.any > 0 then
+    for _, id in ipairs(pre.any) do
+      if Player:IsCompleted(id) then return true end
+    end
+    return false
+  end
+  return true
+end
+
+-- a quick availability check for quests that start in the player's zone (Clairvoyance does this
+-- properly: exclusivity, breadcrumbs, reputation, skills, events)
 local function availablePins(pins, area)
   local Player, DB = Core.Player, NorgannonDB
   local level = Player.level or 1
@@ -97,18 +121,10 @@ local function availablePins(pins, area)
   for _, id in ipairs(Core.DB:Zone(area).quests) do
     if not Player:IsCompleted(id) and not Player:HasQuest(id) then
       local q = DB:Get("quests", id)
-      local ok = q and q.hidden == nil and (q.minLevel or 1) <= level
+      local available = q and q.hidden == nil and (q.minLevel or 1) <= level
         and (not raceMask or DB.HasFlag(q.races, raceMask)) and (not classMask or DB.HasFlag(q.classes, classMask))
-      local pre = q and q.prerequisites
-      if ok and pre then
-        for _, p in ipairs(pre.all or {}) do if not Player:IsCompleted(p) then ok = false end end
-        if pre.any and #pre.any > 0 then
-          local anyDone = false
-          for _, p in ipairs(pre.any) do if Player:IsCompleted(p) then anyDone = true end end
-          ok = ok and anyDone
-        end
-      end
-      if ok then
+        and (not q.prerequisites or prerequisitesDone(q.prerequisites))
+      if available then
         local qlevel = q.level or 0
         local trivial = UI.Difficulty(qlevel > 0 and qlevel or level, level) == C.trivial
         for _, npc in ipairs(q.starters and q.starters.npcs or {}) do
@@ -125,7 +141,6 @@ local function build()
   questPins(pins)
   local _, _, _, area = Core.Player:GetPosition()
   if area then availablePins(pins, area) end
-  -- only spawns in this zone's areas matter for the preview; keep the rest for the world map
   Core.Map:SetPins("demo", pins)
   return #pins
 end

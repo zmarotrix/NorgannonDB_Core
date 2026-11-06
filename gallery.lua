@@ -8,11 +8,26 @@ local C = UI.C
 
 local gallery
 
+local NO_LEVEL = 1000                -- sorts a quest with no level at all after every other
+
 local function section(parent, text, anchor, y)
   local label = UI.Text(parent, "title", 15, C.goldSoft)
-  label:SetPoint("TOPLEFT", anchor, anchor == parent and "TOPLEFT" or "BOTTOMLEFT", anchor == parent and 16 or 0, y)
+  if anchor == parent then
+    label:SetPoint("TOPLEFT", anchor, "TOPLEFT", 16, y)
+  else
+    label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, y)
+  end
   label:SetText(text)
   return label
+end
+
+-- a row of widgets under an anchor: each one sits to the right of the one before
+local function placeInRow(widget, previous, anchor, gap, y)
+  if previous then
+    widget:SetPoint("TOPLEFT", previous, "TOPRIGHT", gap, 0)
+  else
+    widget:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, y)
+  end
 end
 
 -- Every quest with its localized name and level, sorted by level then name (built once).
@@ -28,8 +43,7 @@ local function questList()
       local name = DB.L and DB:L("quests", id, "name") or q.name
       local level = q.level or 0
       -- -1 scales with the player: sort it by its minimum level
-      -- and a quest with no level at all goes last
-      local sortLevel = level > 0 and level or q.minLevel or 1000
+      local sortLevel = level > 0 and level or q.minLevel or NO_LEVEL
       table.insert(quests, { id = id, name = name, lower = string.lower(name), level = level, minLevel = q.minLevel, sortLevel = sortLevel })
     end
   end
@@ -40,25 +54,29 @@ local function questList()
   return quests
 end
 
-local function build()
-  local w = UI.Window({ name = "NorgannonCoreGallery", addon = "norgannondb", title = "UI kit", sub = "NorgannonDB_Core " .. Core:Version(),
-    width = 940, height = 700, footer = true })
-  local body = w.body
+-------------------------------------------------------------------------------------------
+-- Left column: the controls
+-------------------------------------------------------------------------------------------
 
-  -- accent switcher across the top
-  local keys = {}
-  for _, info in ipairs(Core.SUITE) do table.insert(keys, { key = info.key, label = info.name }) end
-  for _, info in ipairs(Core.FAMILY) do table.insert(keys, { key = info.key, label = info.name }) end
-  local tabs = UI.Tabs(body, keys, function(key)
-    w:SetAccent(key)
-    w:SetTitle(Core:GetAddonInfo(key).name)
-    if Core.db then Core.db.galleryAccent = key end
-  end)
-  tabs:SetPoint("TOPLEFT", 8, -4)
-  tabs:SetPoint("TOPRIGHT", -8, -4)
+-- progress: yours in the accent, a party member's dimmer (suite.css .az-bar / .party)
+local function progressRow(parent, anchor, name, current, total, kind, y)
+  local label = UI.Text(parent, "body", 14, kind and C.muted or C.text)
+  label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, y)
+  label:SetText(name)
+  local bar = UI.Bar(parent, kind)
+  bar:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
+  bar:SetWidth(350)
+  bar:SetProgress(current, total)
+  local count = UI.Text(parent, "body", 13, C.muted)
+  count:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 4)
+  count:SetJustifyH("RIGHT")
+  count:SetText(current .. "/" .. total)
+  bar.label, bar.count = label, count
+  return bar
+end
 
-  -- left column: the controls
-  local left = CreateFrame("Frame", nil, body)
+local function buildControls(w, tabs)
+  local left = CreateFrame("Frame", nil, w.body)
   left:SetPoint("TOPLEFT", tabs, "BOTTOMLEFT", 0, -6)
   left:SetPoint("BOTTOMLEFT", 0, 8)
   left:SetWidth(380)
@@ -77,7 +95,7 @@ local function build()
   for i, def in ipairs(chipDefs) do
     local chip = UI.Chip(left, def[1], def[2])
     chip:SetOn(def[3], true)
-    chip:SetPoint("TOPLEFT", chips[i - 1] or s, chips[i - 1] and "TOPRIGHT" or "BOTTOMLEFT", chips[i - 1] and 6 or 0, chips[i - 1] and 0 or -8)
+    placeInRow(chip, chips[i - 1], s, 6, -8)
     chips[i] = chip
   end
 
@@ -98,7 +116,7 @@ local function build()
   for _, list in ipairs({ Core.SUITE, Core.FAMILY }) do
     for _, info in ipairs(list) do
       local m = UI.Mark(left, info.key, 36)
-      m:SetPoint("TOPLEFT", lastMark or s, lastMark and "TOPRIGHT" or "BOTTOMLEFT", lastMark and 10 or 0, lastMark and 0 or -8)
+      placeInRow(m, lastMark, s, 10, -8)
       firstMark = firstMark or m
       lastMark = m
     end
@@ -109,26 +127,10 @@ local function build()
   diff:SetPoint("TOPLEFT", s, "BOTTOMLEFT", 0, -8)
   w.diff = diff
 
-  -- progress: yours in the accent, a party member's dimmer (suite.css .az-bar / .party)
   s = section(left, "Progress", diff, -18)
-  local function progressRow(anchor, name, current, total, kind, y)
-    local label = UI.Text(left, "body", 14, kind and C.muted or C.text)
-    label:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, y)
-    label:SetText(name)
-    local bar = UI.Bar(left, kind)
-    bar:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -5)
-    bar:SetWidth(350)
-    bar:SetProgress(current, total)
-    local count = UI.Text(left, "body", 13, C.muted)
-    count:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 4)
-    count:SetJustifyH("RIGHT")
-    count:SetText(current .. "/" .. total)
-    bar.label, bar.count = label, count
-    return bar
-  end
-  -- yours is live (Core.Player); the party row is a sample until party comms land
-  w.bar = progressRow(s, "No quest objective with a count", 0, 1, nil, -8)
-  w.partyBar = progressRow(w.bar, "Party member (sample)", 2, 10, "party", -10)
+  -- yours is live (Core.Player); the party row is a fixed sample
+  w.bar = progressRow(left, s, "No quest objective with a count", 0, 1, nil, -8)
+  w.partyBar = progressRow(left, w.bar, "Party member (sample)", 2, 10, "party", -10)
 
   function w:ShowLiveProgress()
     for _, id in ipairs(Core.Player:QuestIds()) do
@@ -142,111 +144,160 @@ local function build()
       end
     end
   end
-  Core:Listen("NORGANNON_QUESTLOG_UPDATED", "gallery", function() if w:IsShown() then w:ShowLiveProgress() end end)
+  Core:Listen("NORGANNON_QUESTLOG_UPDATED", "gallery", function()
+    if w:IsShown() then w:ShowLiveProgress() end
+  end)
+  return left
+end
 
-  -- right column: search + virtual list of every quest
-  local right = CreateFrame("Frame", nil, body)
-  right:SetPoint("TOPLEFT", left, "TOPRIGHT", 12, -8)
-  right:SetPoint("BOTTOMRIGHT", -12, 10)
-  local pane = UI.Pane(right)
+-------------------------------------------------------------------------------------------
+-- Right column: search over all of NorgannonDB, and with no query every quest
+-------------------------------------------------------------------------------------------
+
+local KIND_LABEL = { quest = "Quest", npc = "NPC", object = "Object", item = "Item" }
+
+local function levelBracket(sortLevel)
+  if sortLevel >= NO_LEVEL then return "No level" end
+  local from = math.floor(sortLevel / 10) * 10
+  return string.format("Levels %d–%d", from, from + 9)
+end
+
+-- every quest, under a header per level bracket
+local function questsByBracket()
+  local shown, bracket = {}, nil
+  for _, q in ipairs(questList()) do
+    local b = levelBracket(q.sortLevel)
+    if b ~= bracket then
+      table.insert(shown, { group = b })
+      bracket = b
+    end
+    table.insert(shown, q)
+  end
+  return shown
+end
+
+local function createBrowserRow(row, content)
+  row.level = UI.Text(content, "body", 14)
+  row.level:SetPoint("LEFT", 8, 0)
+  row.level:SetWidth(34)
+  row.level:SetJustifyH("RIGHT")
+  row.name = UI.Text(content, "body", 14, C.text)
+  row.name:SetPoint("LEFT", row.level, "RIGHT", 10, 0)
+  row.name:SetPoint("RIGHT", -60, 0)
+  row.id = UI.Text(content, "body", 12, C.faint)
+  row.id:SetPoint("RIGHT", -8, 0)
+  row.id:SetJustifyH("RIGHT")
+end
+
+local function updateResultRow(row, result)
+  local quest = result.kind == "quest" and #result.ids == 1 and NorgannonDB:Peek("quests", result.ids[1])
+  local level = quest and quest.level
+  local c = (level and level > 0) and UI.Difficulty(level, UnitLevel("player") or 1) or C.faint
+  row.level:SetTextColor(c[1], c[2], c[3])
+  row.level:SetText((level and level > 0) and level or "")
+  row.name:SetText(result.name)
+  row.id:SetText(KIND_LABEL[result.kind] .. (#result.ids > 1 and (" ×" .. #result.ids) or ""))
+end
+
+local function updateQuestRow(row, q)
+  local scales = q.level <= 0 and q.minLevel
+  local c = scales and UI.C.muted or UI.Difficulty(q.level, UnitLevel("player") or 1)
+  row.level:SetTextColor(c[1], c[2], c[3])
+  -- a quest that scales with the player shows its minimum level with a "+"
+  row.level:SetText(q.level > 0 and q.level or (scales and (q.minLevel .. "+")) or "–")
+  row.name:SetText(q.name)
+  row.id:SetText(q.id)
+end
+
+local function showResultTooltip(row, result)
+  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+  GameTooltip:AddLine(result.name, 1, 1, 1)
+  local detail = #result.ids > 1 and (", " .. #result.ids .. " with this name") or (" " .. result.ids[1])
+  GameTooltip:AddLine(KIND_LABEL[result.kind] .. detail, C.muted[1], C.muted[2], C.muted[3])
+  GameTooltip:Show()
+end
+
+-- the game's own tooltip, with the suite's colours for its lines
+local function showQuestTooltip(row, q, accent)
+  local rec = NorgannonDB:Peek("quests", q.id) or {}
+  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+  GameTooltip:AddLine(q.name, 1, 1, 1)
+  local level = q.level > 0 and ("Level " .. q.level) or "Scales with you"
+  GameTooltip:AddLine(level .. (q.minLevel and ("  ·  requires " .. q.minLevel) or ""), C.muted[1], C.muted[2], C.muted[3])
+  local objective = rec.text and rec.text.objectives and rec.text.objectives[1]
+  if objective then GameTooltip:AddLine(objective, .81, .81, .81, true) end
+  GameTooltip:AddLine("Quest " .. q.id, accent[1], accent[2], accent[3])
+  GameTooltip:Show()
+end
+
+local function buildBrowser(w, left)
+  local column = CreateFrame("Frame", nil, w.body)
+  column:SetPoint("TOPLEFT", left, "TOPRIGHT", 12, -8)
+  column:SetPoint("BOTTOMRIGHT", -12, 10)
+  local pane = UI.Pane(column)
   pane:SetAllPoints()
-  right = pane
 
   local list
-  local KIND_LABEL = { quest = "Quest", npc = "NPC", object = "Object", item = "Item" }
-  local search = UI.Search(right, "Search all of NorgannonDB", function(text)
-    local all = questList()
+  local search = UI.Search(pane, "Search all of NorgannonDB", function(text)
+    local all = questList()   -- built once, and not part of the time shown below
     local needle = string.lower(text or "")
     local start = debugprofilestop and debugprofilestop()
     if needle ~= "" then
       -- Core.DB:Search: every kind, ranked, same-named entities grouped
       local results, total = Core.DB:Search(needle, { limit = 200 })
       list:SetData(results)
-      w.shownCount = #results
       local ms = start and (debugprofilestop() - start)
       w.footerText:SetText(string.format("%d matches%s%s", total, total > #results and (", showing " .. #results) or "",
         ms and string.format("  ·  searched in %.1f ms", ms) or ""))
       return
     end
-    -- matching quests under a header per level bracket
-    local shown, count, bracket = {}, 0, nil
-    for _, q in ipairs(all) do
-      if needle == "" or string.find(q.lower, needle, 1, true) then
-        local b = q.sortLevel >= 1000 and "No level" or string.format("Levels %d–%d", math.floor(q.sortLevel / 10) * 10, math.floor(q.sortLevel / 10) * 10 + 9)
-        if b ~= bracket then
-          table.insert(shown, { group = b })
-          bracket = b
-        end
-        table.insert(shown, q)
-        count = count + 1
-      end
-    end
-    list:SetData(shown)
-    w.shownCount = count
+    list:SetData(questsByBracket())
     local ms = start and (debugprofilestop() - start)
-    w.footerText:SetText(string.format("%d of %d quests%s", count, #all, ms and string.format("  ·  filtered in %.1f ms", ms) or ""))
+    w.footerText:SetText(string.format("%d of %d quests%s", #all, #all, ms and string.format("  ·  filtered in %.1f ms", ms) or ""))
   end, nil, "/norg ui")
   search:SetPoint("TOPLEFT", 8, -8)
   search:SetPoint("TOPRIGHT", -8, -8)
 
-  list = UI.List(right, {
+  -- an item is a search result (it has a kind) or a quest from questList
+  list = UI.List(pane, {
     rowHeight = 22,
-    createRow = function(row, content)
-      row.level = UI.Text(content, "body", 14)
-      row.level:SetPoint("LEFT", 8, 0)
-      row.level:SetWidth(34)
-      row.level:SetJustifyH("RIGHT")
-      row.name = UI.Text(content, "body", 14, C.text)
-      row.name:SetPoint("LEFT", row.level, "RIGHT", 10, 0)
-      row.name:SetPoint("RIGHT", -60, 0)
-      row.id = UI.Text(content, "body", 12, C.faint)
-      row.id:SetPoint("RIGHT", -8, 0)
-      row.id:SetJustifyH("RIGHT")
+    createRow = createBrowserRow,
+    updateRow = function(row, item)
+      if item.kind then updateResultRow(row, item) else updateQuestRow(row, item) end
     end,
-    updateRow = function(row, q)
-      if q.kind then   -- a search result
-        local level = q.kind == "quest" and #q.ids == 1 and NorgannonDB:Peek("quests", q.ids[1])
-        local lvl = level and level.level
-        local c = (lvl and lvl > 0) and UI.Difficulty(lvl, UnitLevel("player") or 1) or C.faint
-        row.level:SetTextColor(c[1], c[2], c[3])
-        row.level:SetText((lvl and lvl > 0) and lvl or "")
-        row.name:SetText(q.name)
-        row.id:SetText(KIND_LABEL[q.kind] .. (#q.ids > 1 and (" ×" .. #q.ids) or ""))
-        return
-      end
-      local scales = q.level <= 0 and q.minLevel
-      local c = scales and UI.C.muted or UI.Difficulty(q.level, UnitLevel("player") or 1)
-      row.level:SetTextColor(c[1], c[2], c[3])
-      -- a quest that scales with the player shows its minimum level with a "+"
-      row.level:SetText(q.level > 0 and q.level or (scales and (q.minLevel .. "+")) or "–")
-      row.name:SetText(q.name)
-      row.id:SetText(q.id)
-    end,
-    onClick = function(q) list:Select(q) end,
-    onEnter = function(row, q)
-      if q.kind then
-        GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-        GameTooltip:AddLine(q.name, 1, 1, 1)
-        GameTooltip:AddLine(KIND_LABEL[q.kind] .. (#q.ids > 1 and (", " .. #q.ids .. " with this name") or (" " .. q.ids[1])), C.muted[1], C.muted[2], C.muted[3])
-        GameTooltip:Show()
-        return
-      end
-      -- the game's own tooltip, with the suite's colours for its lines
-      local rec = NorgannonDB:Peek("quests", q.id) or {}
-      GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-      GameTooltip:AddLine(q.name, 1, 1, 1)
-      local level = q.level > 0 and ("Level " .. q.level) or "Scales with you"
-      GameTooltip:AddLine(level .. (q.minLevel and ("  ·  requires " .. q.minLevel) or ""), C.muted[1], C.muted[2], C.muted[3])
-      local objective = rec.text and rec.text.objectives and rec.text.objectives[1]
-      if objective then GameTooltip:AddLine(objective, .81, .81, .81, true) end
-      local a = w.accent
-      GameTooltip:AddLine("Quest " .. q.id, a[1], a[2], a[3])
-      GameTooltip:Show()
+    onClick = function(item) list:Select(item) end,
+    onEnter = function(row, item)
+      if item.kind then showResultTooltip(row, item) else showQuestTooltip(row, item, w.accent) end
     end,
     onLeave = function() GameTooltip:Hide() end,
   })
   list:SetPoint("TOPLEFT", search, "BOTTOMLEFT", -6, -8)
   list:SetPoint("BOTTOMRIGHT", -2, 2)
+  return list, search
+end
+
+-------------------------------------------------------------------------------------------
+-- The window
+-------------------------------------------------------------------------------------------
+
+local function build()
+  local w = UI.Window({ name = "NorgannonCoreGallery", addon = "norgannondb", title = "UI kit", sub = "NorgannonDB_Core " .. Core:Version(),
+    width = 940, height = 700, footer = true })
+
+  -- accent switcher across the top
+  local keys = {}
+  for _, info in ipairs(Core.SUITE) do table.insert(keys, { key = info.key, label = info.name }) end
+  for _, info in ipairs(Core.FAMILY) do table.insert(keys, { key = info.key, label = info.name }) end
+  local tabs = UI.Tabs(w.body, keys, function(key)
+    w:SetAccent(key)
+    w:SetTitle(Core:GetAddonInfo(key).name)
+    if Core.db then Core.db.galleryAccent = key end
+  end)
+  tabs:SetPoint("TOPLEFT", 8, -4)
+  tabs:SetPoint("TOPRIGHT", -8, -4)
+
+  local left = buildControls(w, tabs)
+  local list, search = buildBrowser(w, left)
 
   w:SetScript("OnShow", function()
     local level = UnitLevel("player") or 1
@@ -255,7 +306,8 @@ local function build()
       local l = math.max(1, level + d)
       table.insert(parts, UI.Code(UI.Difficulty(l, level)) .. "Level " .. l .. "|r")
     end
-    diff:SetText(table.concat(parts, "   "))
+    w.diff:SetText(table.concat(parts, "   "))
+    -- the first time: fill the list by running the empty search
     if #list.items == 0 then search.edit:GetScript("OnTextChanged")(search.edit) end
     w:ShowLiveProgress()
   end)
