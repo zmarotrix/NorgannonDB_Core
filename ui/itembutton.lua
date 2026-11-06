@@ -39,6 +39,8 @@ local function create()
   serial = serial + 1
   local b = CreateFrame("Button", "NorgannonCoreItemButton" .. serial, UIParent, "SecureActionButtonTemplate")
   b:SetSize(24, 24)
+  -- both directions: the secure action fires on one of them, depending on the player's
+  -- "cast on key down" setting
   b:RegisterForClicks("AnyUp", "AnyDown")
   b:SetAttribute("type", "item")
   b.box = UI.Box(b, "BACKGROUND", 0)
@@ -46,7 +48,7 @@ local function create()
   b.icon = b:CreateTexture(nil, "ARTWORK")
   b.icon:SetPoint("TOPLEFT", 1, -1)
   b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-  b.icon:SetTexCoord(.08, .92, .08, .92)
+  b.icon:SetTexCoord(.08, .92, .08, .92)   -- trims the border every item icon has
   b.cooldown = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
   b.cooldown:SetAllPoints(b.icon)
   b:SetScript("OnEnter", function(self)
@@ -57,7 +59,10 @@ local function create()
       GameTooltip:Show()
     end
   end)
-  b:SetScript("OnLeave", function(self) self.box:Set(C.lineStrong, C.inset) GameTooltip:Hide() end)
+  b:SetScript("OnLeave", function(self)
+    self.box:Set(C.lineStrong, C.inset)
+    GameTooltip:Hide()
+  end)
   b:Hide()
   return b
 end
@@ -85,7 +90,10 @@ end
 function ItemButtons:Hide(key)
   Core:AfterCombat(function()
     local b = self.buttons[key]
-    if b then b:Hide() b:ClearAllPoints() end
+    if b then
+      b:Hide()
+      b:ClearAllPoints()
+    end
   end, "itembutton:" .. key)
 end
 

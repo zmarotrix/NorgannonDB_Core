@@ -14,10 +14,14 @@ local UI = Core.UI
 local MB = { buttons = {} }
 Core.MinimapButton = MB
 
-local SIZE = 32   -- the game tracking button's size
+local SIZE = 32          -- the game tracking button's size
+local RING_GAP = 10      -- pixels between the minimap's edge and a button's centre
+local DEFAULT_ANGLE = 225
 local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, retrospect = 250, archivum = 275 }
 
--- { upper-left, lower-left, upper-right, lower-right }: which quadrants of the minimap are round
+-- Which quadrants of the minimap are round, in the order MB.Offset counts them:
+-- { lower-right, lower-left, upper-right, upper-left }. (Map's table of the same shapes has
+-- another order, to suit its own lookup.)
 local SHAPES = {
   ["ROUND"] = { true, true, true, true }, ["SQUARE"] = { false, false, false, false },
   ["CORNER-TOPLEFT"] = { false, false, false, true }, ["CORNER-TOPRIGHT"] = { false, false, true, false },
@@ -41,21 +45,22 @@ end
 function MB.Offset(angle)
   local a = math.rad(angle)
   local x, y = math.cos(a), math.sin(a)
-  local q = 1
-  if x < 0 then q = q + 1 end
-  if y > 0 then q = q + 2 end
+  local quadrant = 1
+  if x < 0 then quadrant = quadrant + 1 end
+  if y > 0 then quadrant = quadrant + 2 end
   local shape = SHAPES[GetMinimapShape and GetMinimapShape() or "ROUND"] or SHAPES.ROUND
-  local w = (Minimap:GetWidth() or 140) / 2 + 10
-  local h = (Minimap:GetHeight() or 140) / 2 + 10
-  if shape[q] then
+  local w = (Minimap:GetWidth() or 140) / 2 + RING_GAP
+  local h = (Minimap:GetHeight() or 140) / 2 + RING_GAP
+  if shape[quadrant] then
     return x * w, y * h
   end
+  -- a square corner: push out along the angle as far as a corner reaches, then clamp to the sides
   local diag = math.sqrt(2 * w * w)
   return math.max(-w, math.min(x * diag, w)), math.max(-h, math.min(y * diag, h))
 end
 
 local function place(b)
-  local x, y = MB.Offset(settings(b.key).angle or DEFAULT_ANGLES[b.key] or 225)
+  local x, y = MB.Offset(settings(b.key).angle or DEFAULT_ANGLES[b.key] or DEFAULT_ANGLE)
   b:ClearAllPoints()
   b:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
@@ -69,7 +74,6 @@ local function dragUpdate(b)
   settings(b.key).angle = math.deg(math.atan2(cy - my, cx - mx)) % 360
   place(b)
 end
-MB.DragUpdate = dragUpdate
 
 ---Adds an addon's minimap button. opts: tooltip(tt), onClick(button).
 function MB:Add(key, opts)
