@@ -1,5 +1,6 @@
 ## Interface: 16001
 ## Title: |cffe7c66cNorgannonDB|r Core
+## Category: NorgannonDB
 ## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Dimension, Council, Muster, Archivum): UI kit, events, settings. /norg
 ## Author: Maro
 ## Version: 1.17.0
@@ -7,7 +8,6 @@
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB
 ## SavedVariables: NorgannonCoreDB
-## Category: Libraries
 ## IconTexture: Interface\AddOns\NorgannonDB_Core\media\marks\norgannondb
 
 libs\LibStub\LibStub.lua
