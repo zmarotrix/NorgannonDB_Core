@@ -11,6 +11,7 @@ Core.SUITE = {
   { key = "retrospect", name = "Retrospect", folder = "Retrospect", accent = "ffb35c", role = "Your characters, account-wide", slash = "/retro" },
   { key = "dimension", name = "Dimension", folder = "Dimension", accent = "f08a9d", role = "Your bags, looked after", slash = "/dim" },
   { key = "council", name = "Council", folder = "Council", accent = "c3e05a", role = "Your guild's loot and records", slash = "/council" },
+  { key = "muster", name = "Muster", folder = "Muster", accent = "e87ad6", role = "Guild recruitment, without the spam", slash = "/muster" },
   { key = "archivum", name = "Archivum", folder = "Archivum", accent = "7cc4ff", role = "Database browser", slash = "/arch" },
 }
 Core.FAMILY = {
