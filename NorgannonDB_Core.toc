@@ -3,8 +3,8 @@
 ## Category: NorgannonDB
 ## Notes: The core of Norgannon, add-ons made for WoW Forever (Clairvoyance, Oracle, Retrospect, Dimension, Mercy, Bulwark; for guilds Council and Muster): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.23.1
-## X-Core-API: 1.23
+## Version: 1.24.0
+## X-Core-API: 1.24
 ## X-License: All Rights Reserved
 ## OptionalDeps: NorgannonDB
 ## SavedVariables: NorgannonCoreDB
@@ -34,6 +34,8 @@ ui\bar.lua
 ui\window.lua
 ui\list.lua
 ui\actionlist.lua
+secret.lua
+ui\unitauras.lua
 ui\about.lua
 ui\menu.lua
 ui\controls.lua

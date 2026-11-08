@@ -2,6 +2,22 @@
 
 Earlier versions are in the git history.
 
+## 1.24.0 (2026-11-07)
+
+- For add-ons that show health, threat or anything else the client keeps secret (health always, about 90 getters in
+  combat), the way Mercy and Bulwark do it, now for everyone:
+  - `UI.UnitBar(parent, opts)`: a health or power bar that never reads the secret numbers. Colour fixed or a
+    red-to-green gradient, text current, percent or missing, short numbers.
+  - `Core.Secret`: `Curve` and `ColorCurve` (the client does the maths on a secret), `Text` and `Number` (formatted
+    secrets), `Alpha` (show or fade by a secret boolean, since `SetShown` won't take one), `Color` and
+    `ColorFromBoolean`.
+  - `UI.UnitAuras(parent, unit, opts)`: a unit's buffs and debuffs, drawn by the game in a container of yours, in
+    combat too. Add-ons can't read auras in combat on Forever, but the game can draw them.
+- Not built, on purpose: a cooldown swipe for secret in-combat cooldowns. Every Cooldown setter takes secrets only from
+  Blizzard's own code (ForeverAPI's widget data), so an add-on can't feed one.
+- Forever's `WOW_PROJECT_ID` is 18, `WOW_PROJECT_CAMELOT` (ForeverAPI), not Retail as reported: `Core.Client.Flavor()`
+  never trusted it, and the comment now says so.
+
 ## 1.23.1 (2026-11-07)
 
 - Fixed: with more than 24 objectives near you, the compass stopped and the game reported

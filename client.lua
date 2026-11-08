@@ -14,9 +14,9 @@ Core.client = {
 }
 
 -------------------------------------------------------------------------------------------
--- Which client (1.23). Don't trust WOW_PROJECT_ID on Forever: players and library authors report it saying
--- Retail, so libraries that check it take Forever for Retail (HereBeDragons needed a patch for exactly this). The
--- interface number is what tells: Forever is 16000-16999 (16001 on client 1.60.1, ForeverAPI's dump).
+-- Which client (1.23). Don't trust WOW_PROJECT_ID on Forever: it is 18, WOW_PROJECT_CAMELOT (ForeverAPI), neither
+-- Classic (2) nor Mainline (1), so libraries that branch on it take neither branch (HereBeDragons needed a patch for
+-- exactly this). The interface number is what tells: Forever is 16000-16999 (16001 on client 1.60.1).
 -------------------------------------------------------------------------------------------
 
 local Client = {}
