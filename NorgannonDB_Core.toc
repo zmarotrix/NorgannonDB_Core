@@ -3,8 +3,8 @@
 ## Category: NorgannonDB
 ## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Dimension, Council, Muster, Mercy, Bulwark, Archivum): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.17.3
-## X-Core-API: 1.17
+## Version: 1.18.0
+## X-Core-API: 1.18
 ## X-License: All Rights Reserved
 ## Dependencies: NorgannonDB
 ## SavedVariables: NorgannonCoreDB
