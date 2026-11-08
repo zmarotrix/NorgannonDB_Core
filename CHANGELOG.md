@@ -2,6 +2,14 @@
 
 Earlier versions are in the git history.
 
+## 1.21.0 (2026-11-07)
+
+- `Core.Net`, add-on messages under an add-on's own prefix, taken from Council's: `Net:Channel(prefix, { onMessage })`,
+  `:Send(text, distribution, target, priority, volatile)`, `:Blocked()`, `:Test()`, `:QueueSize()`. It moves text, and
+  each add-on keeps its own serializer. It compresses when the client can, holds messages through chat lockdown instead
+  of losing them, finds out with a real test send whether the game refuses them, and whispers the sender's full name.
+  `Net.Pack` and `Net.Unpack` give the wire framing ("T" text, "Z" compressed).
+
 ## 1.20.0 (2026-11-07)
 
 - API 1.20, the pieces several add-ons had each built their own copy of:

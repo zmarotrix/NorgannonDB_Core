@@ -3,8 +3,8 @@
 ## Category: NorgannonDB
 ## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Dimension, Council, Muster, Mercy, Bulwark, Archivum): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.20.0
-## X-Core-API: 1.20
+## Version: 1.21.0
+## X-Core-API: 1.21
 ## X-License: All Rights Reserved
 ## OptionalDeps: NorgannonDB
 ## SavedVariables: NorgannonCoreDB
@@ -25,6 +25,7 @@ guild.lua
 bags.lua
 questie_serializer.lua
 comms.lua
+net.lua
 ui\theme.lua
 ui\primitives.lua
 ui\widgets.lua
