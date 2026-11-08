@@ -11,9 +11,6 @@ Core.DB = DBX
 local KINDS = { "quests", "npcs", "objects", "items" }
 DBX.KINDS = KINDS
 
-local BUILD_BUDGET_MS = 4      -- per frame while the name index builds in the background
-local CHUNK = 400              -- records between budget checks
-
 local function db() return NorgannonDB end
 
 -------------------------------------------------------------------------------------------
@@ -44,82 +41,87 @@ end
 
 -------------------------------------------------------------------------------------------
 -- Name index: one slot per distinct lower-cased name and kind, with every id of that name,
--- so a search for "Peacebloom" tracks every Peacebloom node at once
+-- so a search for "Peacebloom" tracks every Peacebloom node at once.
+--
+-- Built per kind, the first time something asks about that kind, not at login: all four kinds
+-- held 10 MB, and most sessions only ever ask about one or two (a tooltip asks about objects,
+-- Council about items). Packed: a slot is its lower-cased name and its ids, where ids is the id
+-- itself when the name has only one (most do) and a sorted list otherwise. The display name is
+-- read from the database when a result is shown.
 -------------------------------------------------------------------------------------------
 
-local index = nil         -- [kind] = { lower = {}, display = {}, ids = {} }
-local building = nil      -- coroutine while the index builds
-DBX.indexReady = false
+local index = {}          -- [kind] = { lower = { name, ... }, ids = { id or {id, ...}, ... }, byLower = { [name] = slot } }
+DBX.indexReady = false    -- every kind built
 
-local function buildIndex(yield)
+local function buildKind(kind)
   local DB = db()
-  local result = {}
-  for _, kind in ipairs(KINDS) do
-    local slots = { lower = {}, display = {}, ids = {} }
-    local byLower = {}
-    local n = 0
-    for id in pairs(DB and DB[kind] or {}) do
-      if not (kind == "quests" and DBX:IsQuestHidden(id)) then
-        local name = DBX:Name(kind, id)
-        if type(name) == "string" and name ~= "" then
-          local lower = string.lower(name)
-          local slot = byLower[lower]
-          if slot then
-            table.insert(slots.ids[slot], id)
-          else
-            slot = #slots.lower + 1
-            byLower[lower] = slot
-            slots.lower[slot], slots.display[slot], slots.ids[slot] = lower, name, { id }
-          end
+  local lower, ids, byLower = {}, {}, {}
+  local n = 0
+  for id in pairs(DB and DB[kind] or {}) do
+    if not (kind == "quests" and DBX:IsQuestHidden(id)) then
+      local name = DBX:Name(kind, id)
+      if type(name) == "string" and name ~= "" then
+        local key = string.lower(name)
+        local slot = byLower[key]
+        if not slot then
+          n = n + 1
+          byLower[key], lower[n], ids[n] = n, key, id
+        elseif type(ids[slot]) == "table" then
+          table.insert(ids[slot], id)
+        else
+          ids[slot] = { ids[slot], id }
         end
       end
-      n = n + 1
-      if yield and n % CHUNK == 0 then yield() end
-    end
-    for _, ids in ipairs(slots.ids) do table.sort(ids) end
-    slots.byLower = byLower
-    result[kind] = slots
-  end
-  return result
-end
-
-local function finish(result)
-  index = result
-  building = nil
-  DBX.indexReady = true
-  Core:Send("NORGANNON_INDEX_READY")
-end
-
----Builds the name index now (if a search needs it before the background build is done).
-function DBX:EnsureIndex()
-  if index then return end
-  finish(buildIndex(nil))
-end
-
--- Background build after login: a few milliseconds per frame, never a hitch.
-local function step()
-  if not building then return end
-  local start = debugprofilestop()
-  while building and debugprofilestop() - start < BUILD_BUDGET_MS do
-    local ok, result = coroutine.resume(building)
-    if not ok then
-      building = nil
-      Core:Debug("db", "name index failed: %s", tostring(result))
-      return
-    end
-    if coroutine.status(building) == "dead" then
-      finish(result)
-      return
     end
   end
-  C_Timer.After(0, step)
+  for _, list in ipairs(ids) do
+    if type(list) == "table" then table.sort(list) end
+  end
+  return { lower = lower, ids = ids, byLower = byLower }
 end
 
-Core:OnLogin(function()
-  if index or building then return end
-  building = coroutine.create(function() return buildIndex(coroutine.yield) end)
-  C_Timer.After(1, step)
-end)
+-- a slot's ids as a list (a fresh one for a single id, so callers may keep it)
+local function idList(slots, slot)
+  local ids = slots.ids[slot]
+  if type(ids) == "table" then return ids end
+  return { ids }
+end
+
+-- a slot's display name: the database's (localized) name of its first id
+local function displayName(kind, slots, slot)
+  local ids = slots.ids[slot]
+  return DBX:Name(kind, type(ids) == "table" and ids[1] or ids) or slots.lower[slot]
+end
+
+local function kindIndex(kind)
+  local slots = index[kind]
+  if not slots then
+    slots = buildKind(kind)
+    index[kind] = slots
+    for _, k in ipairs(KINDS) do
+      if not index[k] then return slots end
+    end
+    DBX.indexReady = true
+    Core:Send("NORGANNON_INDEX_READY")
+  end
+  return slots
+end
+
+---Builds the name index for one kind, or for every kind (each is built the first time it's asked for anyway).
+function DBX:EnsureIndex(kind)
+  if kind then
+    kindIndex(kind)
+    return
+  end
+  for _, k in ipairs(KINDS) do kindIndex(k) end
+end
+
+---How the name index stands, for /norg mem: { [kind] = slots or false (not built) }.
+function DBX:IndexStats()
+  local out = {}
+  for _, kind in ipairs(KINDS) do out[kind] = index[kind] and #index[kind].lower or false end
+  return out
+end
 
 -------------------------------------------------------------------------------------------
 -- Search
@@ -202,7 +204,8 @@ local function takeRanked(buckets, limit)
         if #results >= limit then break end
         local kind, slot = KINDS[math.floor(ref / SLOT_RANGE)], ref % SLOT_RANGE
         local slots = index[kind]
-        results[#results + 1] = { kind = SINGULAR[kind], key = kind, name = slots.display[slot], ids = slots.ids[slot], class = c - 1 }
+        results[#results + 1] = { kind = SINGULAR[kind], key = kind, name = displayName(kind, slots, slot),
+          ids = idList(slots, slot), class = c - 1 }
       end
     end
   end
@@ -217,7 +220,9 @@ function DBX:Search(text, opts)
   opts = opts or {}
   local needle = string.lower(strtrim(text or ""))
   if needle == "" then return {}, 0 end
-  self:EnsureIndex()
+  for _, kind in ipairs(KINDS) do
+    if not opts.kinds or opts.kinds[kind] then kindIndex(kind) end
+  end
 
   local kindsKey = ""
   for _, kind in ipairs(KINDS) do
@@ -235,10 +240,10 @@ end
 ---For tooltips that only have a name. Returns an empty list when nothing matches.
 function DBX:IdsByName(kind, name)
   if type(name) ~= "string" or Core.IsSecret(name) then return {} end
-  self:EnsureIndex()
-  local slots = index[kind]
-  local slot = slots and slots.byLower[string.lower(name)]
-  return slot and slots.ids[slot] or {}
+  if not SINGULAR[kind] then return {} end
+  local slots = kindIndex(kind)
+  local slot = slots.byLower[string.lower(name)]
+  return slot and idList(slots, slot) or {}
 end
 
 -------------------------------------------------------------------------------------------

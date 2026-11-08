@@ -16,7 +16,8 @@ Core.Perf = Perf
 local BUDGET_AVG, BUDGET_FRAME = 1, 16           -- ms
 local DEFAULT_SECONDS = 60
 local REPORT_LINES = 8                           -- the heaviest functions a report prints
-local SUITE_FOLDERS = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Retrospect", "Dimension" }
+local SUITE_FOLDERS = { "NorgannonDB", "NorgannonDB_Core", "Clairvoyance", "NorgannonDBCollector", "Oracle", "Archivum", "Retrospect", "Dimension",
+  "Council", "Muster", "Mercy", "Bulwark", "Guise" }
 
 ---Registers a function to time while measuring: tbl[method], shown as label (grouped by addon).
 function Core:RegisterPerf(label, tbl, method, addon)
@@ -40,17 +41,16 @@ local function closeFrame()
 end
 
 -- Replaces a function with a timed copy. The original runs under pcall so that the timing is
--- still recorded when it errors; the error is then raised again for the caller.
+-- still recorded when it errors; the error is then raised again for the caller. The results
+-- pass through as varargs: a table per call here was charged to the Core's memory while
+-- measuring (the compass alone is timed about 100 times a second).
 local function wrap(entry)
   local original = entry.tbl[entry.method]
   if type(original) ~= "function" then return end
   entry.original = original
   local stat = { calls = 0, total = 0, max = 0 }
   stats[entry.label] = stat
-  entry.tbl[entry.method] = function(...)
-    depth = depth + 1
-    local start = debugprofilestop()
-    local results = { pcall(original, ...) }
+  local function finish(start, ok, ...)
     local took = debugprofilestop() - start
     depth = depth - 1
     stat.calls, stat.total = stat.calls + 1, stat.total + took
@@ -61,8 +61,12 @@ local function wrap(entry)
       frameTime = frameTime + took
       totals.total = totals.total + took
     end
-    if not results[1] then error(results[2], 0) end
-    return unpack(results, 2, table.maxn(results))   -- maxn: the results may hold nils
+    if not ok then error((...), 0) end
+    return ...
+  end
+  entry.tbl[entry.method] = function(...)
+    depth = depth + 1
+    return finish(debugprofilestop(), pcall(original, ...))
   end
 end
 
@@ -87,19 +91,39 @@ function Perf:Start(seconds)
   Core:Print(string.format("measuring for %d s: play normally (move, fight, open the map); /norg perf stop ends early", driver.stopAfter))
 end
 
-local function memoryByAddon()
+-- Each suite add-on's memory in KB: { {name, kb}, ... }. The game's number includes garbage
+-- not collected yet (an add-on that makes and drops many tables looks big until the collector
+-- gets round to it); with `collect`, a full collection runs first and `garbage` says how much
+-- of each add-on's number that was. A full collection is a short hitch, fine in a diagnostic.
+local function memoryByAddon(collect)
   local out = {}
-  if UpdateAddOnMemoryUsage then pcall(UpdateAddOnMemoryUsage) end
   local get = GetAddOnMemoryUsage or (C_AddOns and C_AddOns.GetAddOnMemoryUsage)
   local loaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded
+  local function read()
+    local kbs = {}
+    if UpdateAddOnMemoryUsage then pcall(UpdateAddOnMemoryUsage) end
+    for _, name in ipairs(SUITE_FOLDERS) do
+      if get and (not loaded or loaded(name)) then
+        local ok, kb = pcall(get, name)
+        if ok and type(kb) == "number" and kb > 0 then kbs[name] = kb end
+      end
+    end
+    return kbs
+  end
+  local before = read()
+  local after = before
+  if collect then
+    collectgarbage("collect")
+    after = read()
+  end
   for _, name in ipairs(SUITE_FOLDERS) do
-    if get and (not loaded or loaded(name)) then
-      local ok, kb = pcall(get, name)
-      if ok and type(kb) == "number" and kb > 0 then out[#out + 1] = { name = name, kb = kb } end
+    if after[name] then
+      out[#out + 1] = { name = name, kb = after[name], garbage = collect and math.max(0, (before[name] or 0) - after[name]) or nil }
     end
   end
   return out
 end
+Perf.MemoryByAddon = memoryByAddon
 
 -- the measurement so far, in the shape saved to NorgannonCoreDB.perf
 local function buildReport(entries, started)
@@ -111,7 +135,7 @@ local function buildReport(entries, started)
     avg = totals.total / frames,
     worst = totals.worst,
     labels = {},
-    memory = memoryByAddon(),
+    memory = memoryByAddon(true),
   }
   for _, entry in ipairs(entries) do
     local stat = stats[entry.label]
@@ -155,8 +179,63 @@ function Perf:Print(r)
     Core:Print(string.format("  %s: %.3f ms/frame, %d calls, %.2f ms avg, %.1f ms max", l.label, l.perFrame, l.calls, l.avg, l.max))
   end
   local mem = {}
-  for _, m in ipairs(r.memory) do mem[#mem + 1] = string.format("%s %.1f MB", m.name, m.kb / 1024) end
-  if #mem > 0 then Core:Print("  memory: " .. table.concat(mem, ", ")) end
+  for _, m in ipairs(r.memory) do
+    mem[#mem + 1] = string.format("%s %.1f MB", m.name, m.kb / 1024)
+      .. (m.garbage and m.garbage >= 1024 and string.format(" (+%.1f MB garbage)", m.garbage / 1024) or "")
+  end
+  if #mem > 0 then Core:Print("  memory in use: " .. table.concat(mem, ", ")) end
+end
+
+-------------------------------------------------------------------------------------------
+-- /norg mem: what the suite holds, and what the Core's big tables hold
+-------------------------------------------------------------------------------------------
+
+local function count(t)
+  local n = 0
+  for _ in pairs(t or {}) do n = n + 1 end
+  return n
+end
+
+---Prints each suite add-on's memory (in use, and garbage waiting for the collector) and the
+---sizes of the Core's run-time tables. Runs a full garbage collection (a short hitch).
+function Perf:Memory()
+  for _, m in ipairs(memoryByAddon(true)) do
+    Core:Print(string.format("  %s: %.0f KB in use%s", m.name, m.kb,
+      m.garbage and m.garbage >= 1 and string.format(", %.0f KB was garbage", m.garbage) or ""))
+  end
+  local index = Core.DB:IndexStats()
+  local kinds = {}
+  for _, kind in ipairs(Core.DB.KINDS) do
+    kinds[#kinds + 1] = kind .. " " .. (index[kind] and tostring(index[kind]) or "not built")
+  end
+  Core:Print("  name index (built on first use): " .. table.concat(kinds, ", "))
+  local m = Core.Map:MemoryStats()
+  Core:Print(string.format("  map: %d pins from %d owners in %d areas, %d world positions cached, %d overlap keys; frames: %d world, %d minimap, %d glows",
+    m.pins, m.owners, m.areas, m.worldPositions, m.overlapKeys, m.worldFrames, m.minimapFrames, m.glowFrames))
+  local c = Core.Compass:MemoryStats()
+  Core:Print(string.format("  compass: %d targets, %d marker frames", c.targets, c.markerFrames))
+  Core:Print(string.format("  names: %d people by GUID, %d by first name; party progress from %d players",
+    count(Core.Names.byGuid), count(Core.Names.byFirst), count(Core.Comms and Core.Comms.remote)))
+end
+
+---Measures how fast each suite add-on makes garbage: a full collection, then `seconds` of play
+---(default 10) with the collector paused, then the growth per second. The collector restarts
+---at the end; if the client refuses to pause it, the numbers can come out low.
+function Perf:MemoryRate(seconds)
+  seconds = seconds or 10
+  local start = {}
+  for _, m in ipairs(memoryByAddon(true)) do start[m.name] = m.kb end
+  local paused = pcall(collectgarbage, "stop")
+  Core:Print(string.format("measuring memory growth for %d s: play normally", seconds))
+  C_Timer.After(seconds, function()
+    if paused then pcall(collectgarbage, "restart") end
+    local now = memoryByAddon(false)
+    for _, m in ipairs(now) do
+      local grew = m.kb - (start[m.name] or m.kb)
+      Core:Print(string.format("  %s: %+.1f KB/s", m.name, grew / seconds))
+    end
+    if not paused then Core:Print("  (the collector couldn't be paused; it may have run meanwhile)") end
+  end)
 end
 
 -------------------------------------------------------------------------------------------

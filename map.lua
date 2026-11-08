@@ -71,6 +71,10 @@ end
 
 function Map:ClearPins(owner) self:SetPins(owner, nil) end
 
+local areaInstance = {}     -- area -> the instance its pins are in (false: none), filled by the minimap
+local function byLayer(a, b) return (a.layer or 1) < (b.layer or 1) end
+local resetDrawn   -- defined with the overlap rule
+
 local function rebuildIndex()
   byArea = {}
   for _, pins in pairs(Map.owners) do
@@ -86,9 +90,11 @@ local function rebuildIndex()
     end
   end
   for _, list in pairs(byArea) do
-    table.sort(list, function(a, b) return (a.layer or 1) < (b.layer or 1) end)
+    table.sort(list, byLayer)
   end
   indexDirty = false
+  resetDrawn(true)
+  areaInstance = {}
 end
 
 ---Pins in an area (after index rebuild), lowest layer first.
@@ -300,20 +306,31 @@ Map.ContinentMarkers = continentMarkers
 
 -- Pins sharing an overlapKey (the same quest's "!" or "?") don't stack: one is skipped when
 -- another of its key is already drawn within reach. Measured in screen pixels, so zooming in
--- separates spawns that are really apart. drawn = { [key] = { {x, y}, ... } } for this pass;
--- a pin that isn't skipped is added to it.
-local function overlapsDrawn(drawn, key, x, y, reach)
-  local list = drawn[key]
+-- separates spawns that are really apart. Per pass, drawn[key] = { x1, y1, x2, y2, ... } with
+-- drawnCount[key] numbers in use; a pin that isn't skipped is added. The lists are kept from
+-- pass to pass (the minimap does one every THROTTLE seconds), so a pass makes no tables.
+local drawn, drawnCount = {}, {}
+
+-- a new pass; forget the lists too when the pins change (their keys may be gone)
+resetDrawn = function(forget)
+  if forget then drawn = {} end
+  for key in pairs(drawnCount) do drawnCount[key] = 0 end
+end
+
+local function overlapsDrawn(key, x, y, reach)
+  local list, n = drawn[key], drawnCount[key] or 0
   if list then
-    for _, p in ipairs(list) do
-      local dx, dy = p[1] - x, p[2] - y
-      if dx * dx + dy * dy < reach * reach then return true end
+    local r2 = reach * reach
+    for i = 1, n, 2 do
+      local dx, dy = list[i] - x, list[i + 1] - y
+      if dx * dx + dy * dy < r2 then return true end
     end
   else
     list = {}
     drawn[key] = list
   end
-  list[#list + 1] = { x, y }
+  list[n + 1], list[n + 2] = x, y
+  drawnCount[key] = n + 2
   return false
 end
 
@@ -348,13 +365,13 @@ end
 
 -- draws the world pins; returns how many were drawn and how many were skipped as overlapping
 local function drawWorldPins(pins)
-  local drawn = {}
+  resetDrawn()
   local w, h = world:GetWidth(), world:GetHeight()
   local count, overlapped = 0, 0
   for _, pin in ipairs(pins) do
     if pin.world ~= false then
       local key = pin.overlapKey
-      if key and overlapsDrawn(drawn, key, pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale,
+      if key and overlapsDrawn(key, pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale,
           (pin.size or DEFAULT_PIN_SIZE) * OVERLAP_REACH) then
         overlapped = overlapped + 1
       else
@@ -449,35 +466,58 @@ local function minimapOffset(pin, margin)
   return x, y, distance, inside
 end
 
+-- The pins inside the minimap this pass, as parallel arrays kept from pass to pass: a pass runs
+-- every THROTTLE seconds, and a table per visible pin was most of the Core's memory churn.
+local visPin, visX, visY, visD, visOrder = {}, {}, {}, {}, {}
+local visLast = 0
+local function nearer(a, b) return visD[a] < visD[b] end
+
 function Map:RefreshMinimap()
   local n = 0
   if Minimap:IsVisible() and prepareMinimap() then
     if indexDirty then rebuildIndex() end
-    local visible = {}
-    for _, pins in pairs(byArea) do
-      for _, pin in ipairs(pins) do
-        if pin.minimap ~= false then
-          local x, y, distance, inside = minimapOffset(pin, MINIMAP_EDGE_MARGIN)
-          if inside then visible[#visible + 1] = { pin = pin, x = x, y = y, d = distance } end
+    local count = 0
+    for area, pins in pairs(byArea) do
+      local instance = areaInstance[area]
+      if instance == nil then
+        local _, _, inst = worldOf(pins[1])
+        instance = inst or false
+        areaInstance[area] = instance
+      end
+      -- all of an area's pins share its instance: whole areas on another continent are skipped
+      if instance == view.instance then
+        for _, pin in ipairs(pins) do
+          if pin.minimap ~= false then
+            local x, y, distance, inside = minimapOffset(pin, MINIMAP_EDGE_MARGIN)
+            if inside then
+              count = count + 1
+              visPin[count], visX[count], visY[count], visD[count], visOrder[count] = pin, x, y, distance, count
+            end
+          end
         end
       end
     end
-    if #visible > MINIMAP_MAX then
-      table.sort(visible, function(p, q) return p.d < q.d end)
-      for i = MINIMAP_MAX + 1, #visible do visible[i] = nil end
+    for i = count + 1, visLast do visOrder[i], visPin[i] = nil, nil end   -- let go of last pass's pins
+    visLast = count
+    if count > MINIMAP_MAX then
+      table.sort(visOrder, nearer)
+      for i = MINIMAP_MAX + 1, count do visOrder[i] = nil end
+      count = MINIMAP_MAX
     end
-    local drawn = {}   -- the same overlapKey rule as the world map, in minimap pixels
-    for _, v in ipairs(visible) do
-      local key = v.pin.overlapKey
-      local size = v.pin.minimapSize or DEFAULT_PIN_SIZE
-      if not (key and overlapsDrawn(drawn, key, v.x, v.y, size * OVERLAP_REACH)) then
+    resetDrawn()   -- the same overlapKey rule as the world map, in minimap pixels
+    for i = 1, count do
+      local v = visOrder[i]
+      local pin, x, y = visPin[v], visX[v], visY[v]
+      local key = pin.overlapKey
+      local size = pin.minimapSize or DEFAULT_PIN_SIZE
+      if not (key and overlapsDrawn(key, x, y, size * OVERLAP_REACH)) then
         n = n + 1
         local f = miniPins[n] or newPin(Minimap)
         miniPins[n] = f
-        dress(f, v.pin, size, v.pin.alpha)
-        f:SetFrameLevel(Minimap:GetFrameLevel() + 5 + (v.pin.layer or 1))
+        dress(f, pin, size, pin.alpha)
+        f:SetFrameLevel(Minimap:GetFrameLevel() + 5 + (pin.layer or 1))
         f:ClearAllPoints()
-        f:SetPoint("CENTER", Minimap, "CENTER", v.x, v.y)
+        f:SetPoint("CENTER", Minimap, "CENTER", x, y)
         f:Show()
       end
     end
@@ -564,6 +604,17 @@ driver:SetScript("OnUpdate", function(_, dt)
   end
   Map:RefreshMinimap()
 end)
+
+---What the map layer holds, for /norg mem: owners, pins, indexed areas, cached world positions, frames.
+function Map:MemoryStats()
+  local out = { owners = 0, pins = 0, areas = 0, worldPositions = 0, overlapKeys = 0,
+    worldFrames = #worldPins, minimapFrames = #miniPins, glowFrames = #areaFrames }
+  for _, pins in pairs(self.owners) do out.owners, out.pins = out.owners + 1, out.pins + #pins end
+  for _ in pairs(byArea) do out.areas = out.areas + 1 end
+  for _ in pairs(worldPos) do out.worldPositions = out.worldPositions + 1 end
+  for _ in pairs(drawn) do out.overlapKeys = out.overlapKeys + 1 end
+  return out
+end
 
 ---Draws everything now (normally the driver does it within THROTTLE seconds).
 function Map:Refresh()

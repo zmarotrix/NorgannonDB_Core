@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/WoW%20Forever-1.60.1-e7c66c?style=flat-square" alt="WoW Forever 1.60.1">
-  <img src="https://img.shields.io/badge/API-1.21-e7c66c?style=flat-square" alt="API 1.21">
+  <img src="https://img.shields.io/badge/API-1.22-e7c66c?style=flat-square" alt="API 1.22">
   <img src="https://img.shields.io/badge/status-early%20development-b0913f?style=flat-square" alt="Status: early development">
 </p>
 
@@ -70,7 +70,7 @@ and rename the folder from `NorgannonDB_Core-main` to `NorgannonDB_Core`. Add-on
 - shared quest colours
 - minimap buttons, and the suite's Settings page
 
-Its API is versioned (`Core:Require(major, minor)`, currently 1.21). Add-ons that don't read the game data run on Core without NorgannonDB.
+Its API is versioned (`Core:Require(major, minor)`, currently 1.22). Add-ons that don't read the game data run on Core without NorgannonDB.
 
 </details>
 

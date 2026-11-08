@@ -11,6 +11,7 @@ local HELP = {
   "/norg arrow off - dismiss the waypoint arrow",
   "/norg icons - the town service and gathering icons, and which source the client has",
   "/norg perf [seconds | stop | report] - measure the suite against its performance budgets (default 60 s)",
+  "/norg mem [rate [seconds]] - memory per suite add-on and the Core's tables; rate: how fast each makes garbage",
   "/norg mappins - list what is drawn on the open world map (who draws which markers)",
   "/norg version",
 }
@@ -78,6 +79,15 @@ local function perf(rest)
   end
 end
 
+local function mem(rest)
+  local sub, n = rest:match("^(%S*)%s*(%d*)")
+  if sub == "rate" then
+    Core.Perf:MemoryRate(tonumber(n))
+  else
+    Core.Perf:Memory()
+  end
+end
+
 local function icons()
   local keys = {}
   for key in pairs(Core.Map.SERVICE_ICONS) do keys[#keys + 1] = key end
@@ -122,6 +132,7 @@ local COMMANDS = {
   arrow = arrow,
   mappins = mapPins,
   perf = perf,
+  mem = mem,
   icons = icons,
   version = version,
   debug = debugLog,

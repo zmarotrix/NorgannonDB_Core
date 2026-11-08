@@ -14,7 +14,7 @@ local UI = Core.UI
 local C = UI.C
 local HBD = LibStub("HereBeDragons-NorgannonCore-2.0")
 
-local Compass = { stats = { markers = 0 } }
+local Compass = { stats = { markers = 0, draws = 0 } }
 Core.Compass = Compass
 
 local WIDTH, HEIGHT = 560, 30
@@ -136,11 +136,28 @@ local function markerFrame(i)
   return m
 end
 
--- nearest pin per compass group, recomputed every NEAREST_EVERY seconds
-local targets = {}
+-- nearest pin per compass group, recomputed every NEAREST_EVERY seconds. The tables are kept
+-- from pass to pass (a pass made one per candidate before, four times a second).
+local targets = {}                    -- { pin, x, y, d2 }, nearest first
+local pool = {}                       -- target records, reused
+local bestPin, bestD2 = {}, {}        -- group -> its nearest pin so far, and how far
+local focusPin, focusOf = nil, nil    -- the arrow target's marker pin, made once per target
+local drawDirty = true                -- something besides your position and facing changed: redraw
+
+local function byDistance(a, b) return a.d2 < b.d2 end
+
+local function addTarget(n, pin, x, y, d2)
+  local t = pool[n]
+  if not t then
+    t = {}
+    pool[n] = t
+  end
+  t.pin, t.x, t.y, t.d2 = pin, x, y, d2
+  targets[n] = t
+end
 
 local function collectTargets(px, py, instance)
-  local best = {}
+  for group in pairs(bestPin) do bestPin[group], bestD2[group] = nil, nil end
   for _, pins in pairs(Core.Map.owners) do
     for _, pin in ipairs(pins) do
       local group = pin.compass
@@ -149,25 +166,34 @@ local function collectTargets(px, py, instance)
         if wx and inst == instance then
           local dx, dy = wx - px, wy - py
           local d2 = dx * dx + dy * dy
-          local nearest = best[group]
-          if not nearest or d2 < nearest.d2 then best[group] = { pin = pin, x = wx, y = wy, d2 = d2 } end
+          local nearest = bestD2[group]
+          if not nearest or d2 < nearest then bestPin[group], bestD2[group] = pin, d2 end
         end
       end
     end
   end
-  local list = {}
-  for _, nearest in pairs(best) do list[#list + 1] = nearest end
+  local n = 0
+  for group, pin in pairs(bestPin) do
+    local wx, wy = Core.Map.WorldOf(pin)
+    n = n + 1
+    addTarget(n, pin, wx, wy, bestD2[group])
+  end
   local focus = Core.Arrow and Core.Arrow.world and Core.Arrow.target
   if focus and Core.Arrow.world.instance == instance then
     local w = Core.Arrow.world
     local dx, dy = w.x - px, w.y - py
-    list[#list + 1] = { pin = { title = focus.title or "Waypoint", icon = "diamond", color = C.gold, focus = true },
-      x = w.x, y = w.y, d2 = dx * dx + dy * dy }
+    if focusOf ~= focus then
+      focusPin, focusOf = { title = focus.title or "Waypoint", icon = "diamond", color = C.gold, focus = true }, focus
+    end
+    n = n + 1
+    addTarget(n, focusPin, w.x, w.y, dx * dx + dy * dy)
   end
-  table.sort(list, function(a, b) return a.d2 < b.d2 end)
+  for i = n + 1, #targets do targets[i] = nil end
+  table.sort(targets, byDistance)
   -- only the nearest fit
-  for i = MAX_MARKERS + 1, #list do list[i] = nil end
-  targets = list
+  for i = MAX_MARKERS + 1, #targets do targets[i] = nil end
+  for i = #targets + 1, #pool do pool[i].pin = nil end   -- let go of pins that are no longer targets
+  drawDirty = true
 end
 
 -------------------------------------------------------------------------------------------
@@ -175,6 +201,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local sinceNearest = NEAREST_EVERY
+local drawn = {}                    -- where and which way the strip was last drawn
 local FADE_OUT, FADE_IN = .6, .25   -- seconds
 local fade = 0                      -- the strip's opacity while fading in and out
 
@@ -265,13 +292,32 @@ function Compass:Update(dt)
     fade = 0
     return
   end
-  if not f:IsShown() then fade = 0 end
+  if not f:IsShown() then
+    fade = 0
+    drawDirty = true
+  end
   f:Show()
   fade = Compass.moving and 1 or math.min(1, fade + (dt or 0) / FADE_IN)
   f:SetAlpha(fade)
-  drawScale(facing)
-  drawMarkers(px, py, instance, facing)
+  -- standing still and not turning: the strip already shows this (most frames while reading,
+  -- looting or fighting in place)
+  if drawDirty or px ~= drawn.x or py ~= drawn.y or facing ~= drawn.facing or instance ~= drawn.instance then
+    drawn.x, drawn.y, drawn.facing, drawn.instance = px, py, facing, instance
+    drawDirty = false
+    Compass.stats.draws = Compass.stats.draws + 1
+    drawScale(facing)
+    drawMarkers(px, py, instance, facing)
+  end
 end
+
+---What the compass holds, for /norg mem.
+function Compass:MemoryStats()
+  return { targets = #targets, records = #pool, markerFrames = #markers }
+end
+
+-- a highlight or a quest's new colour changes how markers look
+Core:Listen("NORGANNON_MAP_HIGHLIGHT", "compass", function() drawDirty = true end)
+Core:Listen("NORGANNON_QUEST_COLOR_CHANGED", "compass", function() drawDirty = true end)
 
 f:SetScript("OnUpdate", function(_, dt) Compass:Update(dt) end)
 

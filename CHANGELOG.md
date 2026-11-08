@@ -2,6 +2,31 @@
 
 Earlier versions are in the git history.
 
+## 1.22.0 (2026-11-07)
+
+Memory. In game the Core showed 23.5 MB after two minutes of questing; it was two things, both fixed.
+
+- The minimap pins no longer make garbage. Each redraw (20 a second) made a table for every pin inside the minimap,
+  one per pin for its icon's file list and one per overlap check: about 22 KB per redraw with 486 pins, 445 KB a
+  second, which the game counts against the Core until the collector gets to it. Now a redraw makes none. Areas on
+  another continent are skipped whole.
+- The name index is built per kind, the first time something asks (a search, `Core.DB:IdsByName`), not at login, and
+  packed: a name with one id keeps the id itself, and the display name is read from the database when shown. All four
+  kinds took 10.3 MB; they now take 6.2 MB, and a session that only hovers objects holds 0.6 MB. A kind builds in
+  under 20 ms. `Core.DB:EnsureIndex(kind)` builds one kind (or every kind without one); `DB.indexReady` and
+  `NORGANNON_INDEX_READY` now mean every kind is built. Results and `IdsByName` still return lists.
+- The compass doesn't redraw while you stand still facing the same way; it redraws when you move or turn, when its
+  targets are recomputed (4 a second), and on a highlight or a colour change. Finding the nearest pin per group
+  makes no tables.
+- `/norg mem` prints each suite add-on's memory in use and how much of it was garbage (after a full collection, a
+  short hitch), the name index per kind, the map's pins, areas, cached world positions and frames, the compass, and
+  the people Names knows. `/norg mem rate [seconds]` pauses the collector for that long (default 10) and prints how
+  fast each add-on makes garbage.
+- `/norg perf` reports memory in use after a full collection, with the garbage beside it, and covers every suite
+  add-on. The timing wrapper no longer makes a table per call, which it charged to the Core.
+- New: `Core.DB:IndexStats()`, `Core.Map:MemoryStats()`, `Core.Compass:MemoryStats()`, `Core.Perf:Memory()`,
+  `Core.Perf:MemoryRate(seconds)`, `Compass.stats.draws`.
+
 ## 1.21.2 (2026-11-07)
 
 - NorgannonDB's Settings page is now the suite's hub, made for many add-ons:

@@ -79,6 +79,16 @@ end
 -- SetTexture reports false for a missing file on modern clients
 local function tryFile(tex, file) return file and tex:SetTexture(file) ~= false end
 
+-- the first of an icon's files the client has, set on tex (spec.files, or the one spec.file;
+-- no table per call: every pin on the minimap is dressed every redraw)
+local function firstFile(tex, spec)
+  local files = spec.files
+  if not files then return tryFile(tex, spec.file) and spec.file or nil end
+  for _, file in ipairs(files) do
+    if tryFile(tex, file) then return file end
+  end
+end
+
 local probe   -- a hidden texture to try files on
 
 ---Which source of an icon the client has: "atlas", "file", "round" or "fallback" (and the name).
@@ -90,9 +100,8 @@ function Icons.Source(name)
     probe = UIParent:CreateTexture()
     probe:Hide()
   end
-  for _, file in ipairs(spec.files or { spec.file }) do
-    if tryFile(probe, file) then return "file", file end
-  end
+  local file = firstFile(probe, spec)
+  if file then return "file", file end
   if tryFile(probe, spec.round) then return "round", spec.round end
   return "fallback", spec.fallback
 end
@@ -107,10 +116,7 @@ local function setIcon(tex, name)
   elseif spec.atlas and hasAtlas(spec.atlas) then
     tex:SetAtlas(spec.atlas)
   else
-    local done = false
-    for _, file in ipairs(spec.files or { spec.file }) do
-      if tryFile(tex, file) then done = true break end
-    end
+    local done = firstFile(tex, spec) ~= nil
     if not done and tryFile(tex, spec.round) then done, round = true, true end
     if not done then tex:SetTexture(spec.fallback or UI.TEX.pin) end
   end
