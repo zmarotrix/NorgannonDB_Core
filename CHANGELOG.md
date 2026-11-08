@@ -2,6 +2,14 @@
 
 Earlier versions are in the git history.
 
+## 1.25.0 (2026-11-07)
+
+- `Core:Say(text, kind)`: a chat line from an add-on that reaches chat, or, where the game doesn't let it through
+  (reported in instances, and seen by Council in raids), the chat box opens with the line ready to send with Enter.
+  It remembers which chats reach, in instances and outside them separately. `Core:OpenChat(text)`, `Core:ResetSay()`.
+  From Council's loot announcements.
+- The developer guide opens with the Forever toolkit: each WoW Forever problem and the Core call that solves it.
+
 ## 1.24.0 (2026-11-07)
 
 - For add-ons that show health, threat or anything else the client keeps secret (health always, about 90 getters in
