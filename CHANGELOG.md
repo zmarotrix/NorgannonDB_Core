@@ -5,7 +5,7 @@ Earlier versions are in the git history.
 ## 1.19.0 (2026-11-07)
 
 - Core no longer needs NorgannonDB. Add-ons that don't read the game data (Muster, Mercy, Bulwark) now
-  run with Core alone, without the 163 MB database. With NorgannonDB missing, Core's data calls
+  run with Core alone, without the quest database (about 33 MB of game memory). With NorgannonDB missing, Core's data calls
   answer nothing, and `/norg demo` and `/norg version` say so.
 - API 1.19, for building add-ons (see docs/dev/getting-started.md in the suite workspace):
   - `Core:NewAddon(key, opts)`: the version check, saved variables with defaults and migrations,
