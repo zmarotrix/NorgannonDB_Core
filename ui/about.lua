@@ -36,10 +36,10 @@ local function build()
   f.mark:SetPoint("TOPLEFT", 14, -14)
   f.title = UI.Text(f, "title", 19, C.goldSoft)
   f.title:SetPoint("TOPLEFT", f.mark, "TOPRIGHT", 10, -2)
-  f.title:SetText("NorgannonDB")
+  f.title:SetText("Norgannon")
   f.tagline = UI.Text(f, "body", 12, C.muted)
   f.tagline:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -2)
-  f.tagline:SetText("Open, crowd-sourced game data")
+  f.tagline:SetText("Know Azeroth as it is.")
   f.close = UI.CloseButton(f, function() f:Hide() end)
   f.close:SetSize(18, 18)
   f.close:SetPoint("TOPRIGHT", -8, -8)
@@ -48,9 +48,9 @@ local function build()
   f.about:SetPoint("TOPLEFT", f.mark, "BOTTOMLEFT", 0, -12)
   f.about:SetWidth(WIDTH - 28)
   f.about:SetWordWrap(true)
-  f.about:SetText("One open database of the quests, NPCs, objects, items, drops and spawns in WoW Forever. "
-    .. "Every suite add-on reads from it, and any other add-on is welcome to. It is free and open source, "
-    .. "and it grows from what players see in the game.")
+  f.about:SetText("Add-ons made for WoW Forever, on one open database of its quests, creatures, objects, items, "
+    .. "drops and spawns. That database, NorgannonDB, is free and open source, any add-on may read it, and it's "
+    .. "kept true by what players see in the game.")
 
   f.rule = UI.Rule(f)
   f.rule:SetPoint("TOPLEFT", f.about, "BOTTOMLEFT", 0, -12)
@@ -82,18 +82,18 @@ local function build()
     local state = Core:AddonState("collector")
     local stats = state == "loaded" and collectorStats()
     if stats then
-      self.chead:SetText("Thank you for helping map Azeroth")
+      self.chead:SetText("Thank you for keeping it true")
       self.ctext:SetText(string.format("You have recorded %s, %s, %s and %s. Send them in with the button below "
         .. "(or /ndbc export) now and then.", plural(stats.npcs, "NPC"), plural(stats.objects, "object"),
         plural(stats.quests, "quest"), plural(stats.items, "item")))
       self.action:Show()
     elseif state == "installed" then
-      self.chead:SetText("Help map Azeroth")
+      self.chead:SetText("Help keep it true")
       self.ctext:SetText("NorgannonDB Collector is installed but turned off. Turn it on in the AddOns list "
         .. "on the character screen to start contributing.")
       self.action:Hide()
     else
-      self.chead:SetText("Help map Azeroth")
+      self.chead:SetText("Help keep it true")
       self.ctext:SetText("Install NorgannonDB Collector. It quietly records the NPCs, quests and drops you see "
         .. "as you play: no setup, nothing recorded in combat, and no character names. Every contribution "
         .. "makes the database more accurate for everyone.")

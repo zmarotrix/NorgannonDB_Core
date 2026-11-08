@@ -272,8 +272,9 @@ end
 
 local function mainTooltip()
   local n = #MB:Keys()
-  GameTooltip:AddLine("NorgannonDB", C.goldSoft[1], C.goldSoft[2], C.goldSoft[3])
-  GameTooltip:AddLine(n == 1 and "1 add-on of the suite" or (n .. " add-ons of the suite"), 1, 1, 1)
+  local star = UI.Accent("core")
+  GameTooltip:AddLine("Norgannon", star[1], star[2], star[3])
+  GameTooltip:AddLine(n == 1 and "1 add-on" or (n .. " add-ons"), 1, 1, 1)
   GameTooltip:AddLine("Click: the list  ·  Right-click: settings  ·  Drag: move", .43, .4, .32)
 end
 
@@ -454,7 +455,7 @@ Core:On("PLAYER_ENTERING_WORLD", "core.minimapbuttons", function()
 end)
 
 -------------------------------------------------------------------------------------------
--- Settings: NorgannonDB > Minimap
+-- Settings: Norgannon > Minimap
 -------------------------------------------------------------------------------------------
 
 function MB:OpenSettings()

@@ -34,7 +34,7 @@ function UI.Powered(parent)
   f.text:SetPoint("LEFT", f.icon, "RIGHT", 5, 0)
   local function paint(hover)
     local small, name = hover and C.muted or C.faint, hover and C.goldSoft or C.muted
-    f.text:SetText(UI.Code(small) .. "POWERED BY|r " .. UI.Code(name) .. "NORGANNONDB|r")
+    f.text:SetText(UI.Code(small) .. "POWERED BY|r " .. UI.Code(name) .. "NORGANNON|r")
     f.icon:SetVertexColor(small[1], small[2], small[3])
   end
   paint(false)

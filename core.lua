@@ -38,10 +38,10 @@ function Core:RequireMessage(name, major, minor)
   if self:Require(major, minor) then return nil end
   local wanted = major .. "." .. (minor or 0)
   if major > self.VERSION_MAJOR or (major == self.VERSION_MAJOR and (minor or 0) > self.VERSION_MINOR) then
-    return string.format("%s needs NorgannonDB Core %s or newer (this is %s): update NorgannonDB Core. %s is turned off.",
+    return string.format("%s needs Norgannon Core %s or newer (this is %s): update Norgannon Core. %s is turned off.",
       name, wanted, self:Version(), name)
   end
-  return string.format("%s was made for NorgannonDB Core %s, which this Core (%s) no longer serves: update %s. It is turned off.",
+  return string.format("%s was made for Norgannon Core %s, which this Core (%s) no longer serves: update %s. It is turned off.",
     name, wanted, self:Version(), name)
 end
 

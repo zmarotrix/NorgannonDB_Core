@@ -119,10 +119,10 @@ local function buildPage()
   mark:SetPoint("TOPLEFT", SIDE, -14)
   local title = UI.Text(page, "title", 26, C.goldSoft)
   title:SetPoint("TOPLEFT", mark, "TOPRIGHT", 12, -2)
-  title:SetText("NorgannonDB")
+  title:SetText("Norgannon")
   local role = UI.Text(page, "body", 14, C.muted)
   role:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -3)
-  role:SetText("The core of the suite: your add-ons, their versions and credits")
+  role:SetText("Add-ons made for WoW Forever: yours, their versions and the credits")
   page.dbLine = UI.Text(page, "body", 13, C.faint)
   page.dbLine:SetPoint("TOPLEFT", mark, "BOTTOMLEFT", 0, -10)
 
@@ -199,12 +199,12 @@ end
 Core:OnReady(function()
   if not (Settings and Settings.RegisterCanvasLayoutCategory) then return end
   local page = buildPage()
-  local category = Settings.RegisterCanvasLayoutCategory(page, "NorgannonDB")
+  local category = Settings.RegisterCanvasLayoutCategory(page, "Norgannon")
   Settings.RegisterAddOnCategory(category)
   Core.settingsPage, Core.settingsCategory = page, category
 end)
 
--- the compass and the arrow belong to the Core: their page sits under NorgannonDB
+-- the compass and the arrow belong to the Core: their page sits under Norgannon
 Core:OnReady(function()
   if not (Settings and Settings.RegisterCanvasLayoutSubcategory) then return end
   local page = CreateFrame("Frame")

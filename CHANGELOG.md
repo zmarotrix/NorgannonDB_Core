@@ -2,6 +2,15 @@
 
 Earlier versions are in the git history.
 
+## 1.22.6 (2026-11-07)
+
+- The suite's name in game is **Norgannon**, its brand name (brand/BRAND.md). NorgannonDB stays the name of the game
+  database. The Settings category, the hub page, the minimap button's tooltip, the About card and "Powered by" say
+  Norgannon, and this add-on's title is Norgannon Core. Folders, globals and saved variables are unchanged.
+- The add-ons' roles follow the brand's words: Quest map & tracker, Dungeon & world atlas, Alt tracker, Bag manager,
+  Healer frames, Threat & aggro, Guild loot & records, Guild recruiting.
+- The About card says what Norgannon is, and asks for help keeping the database true.
+
 ## 1.22.5 (2026-11-07)
 
 - `/norg minimap` puts three test pins around you (red on you, green 50 yards north, blue 100 yards east) for a
