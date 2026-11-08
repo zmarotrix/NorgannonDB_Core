@@ -4,17 +4,18 @@
 
 local Core = NorgannonCore
 
--- The suite and its companions, in display order. accent is the brand colour (brand/README.md).
+-- The suite and its companions, in display order. accent is the brand colour (brand/README.md); group = "guild"
+-- marks the add-ons for guilds, listed after the rest under their own heading.
 Core.SUITE = {
   { key = "clairvoyance", name = "Clairvoyance", folder = "Clairvoyance", accent = "4fe3cf", role = "Quest helper", slash = "/clair" },
   { key = "oracle", name = "Oracle", folder = "Oracle", accent = "b48cff", role = "Dungeon & zone atlas", slash = "/oracle" },
   { key = "retrospect", name = "Retrospect", folder = "Retrospect", accent = "ffb35c", role = "Your characters, account-wide", slash = "/retro" },
   { key = "dimension", name = "Dimension", folder = "Dimension", accent = "f08a9d", role = "Your bags, looked after", slash = "/dim" },
-  { key = "council", name = "Council", folder = "Council", accent = "c3e05a", role = "Your guild's loot and records", slash = "/council" },
-  { key = "muster", name = "Muster", folder = "Muster", accent = "e87ad6", role = "Guild recruitment, without the spam", slash = "/muster" },
   { key = "mercy", name = "Mercy", folder = "Mercy", accent = "ffeea0", role = "Healer frames", slash = "/mercy" },
   { key = "bulwark", name = "Bulwark", folder = "Bulwark", accent = "3d66e8", role = "Combat & aggro", slash = "/bulwark" },
-  { key = "archivum", name = "Archivum", folder = "Archivum", accent = "7cc4ff", role = "Database browser", slash = "/arch" },
+  -- for guilds: part of the suite, shown after it under their own heading
+  { key = "council", name = "Council", folder = "Council", accent = "c3e05a", role = "Your guild's loot and records", slash = "/council", group = "guild" },
+  { key = "muster", name = "Muster", folder = "Muster", accent = "e87ad6", role = "Guild recruitment, without the spam", slash = "/muster", group = "guild" },
 }
 Core.FAMILY = {
   { key = "norgannondb", name = "NorgannonDB", folder = "NorgannonDB", accent = "e7c66c", role = "The shared game database" },

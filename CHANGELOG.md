@@ -2,6 +2,15 @@
 
 Earlier versions are in the git history.
 
+## 1.22.4 (2026-11-07)
+
+- Council and Muster are the suite's add-ons for guilds: `Core.SUITE` lists them last with `group = "guild"`.
+  NorgannonDB's Settings page shows them after the others under a "For guilds" heading, and the minimap list sorts
+  them last.
+- Archivum, the database browser, is shelved: it's gone from the registry, so nothing lists it as missing. Its mark
+  stays in the Core's media in case it comes back.
+- The README's suite table follows: For guilds last, no Archivum.
+
 ## 1.22.3 (2026-11-07)
 
 - The minimap's view radius on a client without `C_Minimap.GetViewRadius` (Forever) is now the classic client's

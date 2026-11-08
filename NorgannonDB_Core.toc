@@ -1,9 +1,9 @@
 ## Interface: 16001
 ## Title: |cffe7c66cNorgannonDB|r Core
 ## Category: NorgannonDB
-## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Dimension, Council, Muster, Mercy, Bulwark, Archivum): UI kit, events, settings. /norg
+## Notes: Shared runtime for the NorgannonDB suite (Clairvoyance, Oracle, Retrospect, Dimension, Mercy, Bulwark; for guilds Council and Muster): UI kit, events, settings. /norg
 ## Author: Maro
-## Version: 1.22.3
+## Version: 1.22.4
 ## X-Core-API: 1.22
 ## X-License: All Rights Reserved
 ## OptionalDeps: NorgannonDB

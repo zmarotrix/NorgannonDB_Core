@@ -25,7 +25,7 @@ local SIZE = 32          -- the game tracking button's size
 local RING_GAP = 10      -- pixels between the minimap's edge and a button's centre
 local MAIN_ANGLE = 225
 local DEFAULT_ANGLE = 225
-local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, retrospect = 250, archivum = 275 }
+local DEFAULT_ANGLES = { clairvoyance = 200, oracle = 225, retrospect = 250 }
 local ROW_H, FLYOUT_W, PAD = 36, 250, 6
 local TEXT_W = FLYOUT_W - 1 - 6 - 24 - 8 - 4 - 20 - 6 - 1   -- between the mark and the pin
 

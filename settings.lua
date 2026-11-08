@@ -64,16 +64,30 @@ local function newTile(parent, info)
   return tile
 end
 
--- Places the tiles of what's on this computer in two columns; missing add-ons get none, and the rest close up.
+-- Places the tiles of what's on this computer in two columns; missing add-ons get none, and the rest close up. The
+-- add-ons for guilds come after the others, under their own heading.
+local GUILD_HEAD_H = 30
 local function layout(page)
   local width = page.area:GetWidth()
   if not width or width < 100 then width = FALLBACK_W - 2 * SIDE end
   local colW = math.floor((width - GAP) / 2)
   page.area.content:SetWidth(width)
-  local shown = 0
+  local shown, top, sectionStart, guildShown = 0, 0, 0, false
+  page.guildHead:Hide()
   for _, tile in ipairs(page.rows) do
     local state = Core:AddonState(tile.key)
     tile:SetShown(state ~= "missing")
+    if state ~= "missing" and tile.group == "guild" and not guildShown then
+      -- the guild heading starts a new row below what came before
+      guildShown = true
+      local rows = math.ceil((shown - sectionStart) / 2)
+      top = top + rows * (TILE_H + GAP) + (shown > 0 and 6 or 0)
+      page.guildHead:ClearAllPoints()
+      page.guildHead:SetPoint("TOPLEFT", page.area.content, "TOPLEFT", 0, -top - 6)
+      page.guildHead:Show()
+      top = top + GUILD_HEAD_H
+      sectionStart = shown
+    end
     if state ~= "missing" then
       local version = Core:AddonVersion(tile.key)
       tile.version:SetText(version and ("v" .. version) or "")
@@ -81,18 +95,18 @@ local function layout(page)
       tile.state:SetText(text or "")
       if color then tile.state:SetTextColor(color[1], color[2], color[3]) end
       tile.role:SetShown(text == nil)
-      local col, row = shown % 2, math.floor(shown / 2)
+      local col, row = (shown - sectionStart) % 2, math.floor((shown - sectionStart) / 2)
       tile:SetWidth(colW)
       local textW = colW - 61                -- the tile less its mark and margins
       tile.name:SetWidth(textW - 56)         -- room for the version
       tile.role:SetWidth(textW)
       tile.state:SetWidth(textW)
       tile:ClearAllPoints()
-      tile:SetPoint("TOPLEFT", page.area.content, "TOPLEFT", col * (colW + GAP), -row * (TILE_H + GAP))
+      tile:SetPoint("TOPLEFT", page.area.content, "TOPLEFT", col * (colW + GAP), -top - row * (TILE_H + GAP))
       shown = shown + 1
     end
   end
-  page.area.content:SetHeight(math.max(1, math.ceil(shown / 2) * (TILE_H + GAP)))
+  page.area.content:SetHeight(math.max(1, top + math.ceil((shown - sectionStart) / 2) * (TILE_H + GAP)))
   page.suiteHead:SetShown(shown > 0)
   page.shown = shown
 end
@@ -128,7 +142,19 @@ local function buildPage()
   local list = {}
   for _, info in ipairs(Core.SUITE) do list[#list + 1] = info end
   list[#list + 1] = Core:GetAddonInfo("collector")   -- NorgannonDB itself is the page's header
-  for _, info in ipairs(list) do page.rows[#page.rows + 1] = newTile(area.content, info) end
+  -- the add-ons for guilds last, under their own heading (collector, NorgannonDB's own, comes before them)
+  for _, guild in ipairs({ false, true }) do
+    for _, info in ipairs(list) do
+      if (info.group == "guild") == guild then
+        local tile = newTile(area.content, info)
+        tile.group = info.group
+        page.rows[#page.rows + 1] = tile
+      end
+    end
+  end
+  page.guildHead = UI.Text(area.content, "title", 14, C.goldSoft)
+  page.guildHead:SetText("For guilds")
+  page.guildHead:Hide()
 
   -- footer: the credits the licences ask for, then the gallery and the debug log
   local credits = UI.Text(page, "body", 12, C.muted)

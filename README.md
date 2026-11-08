@@ -33,11 +33,11 @@ of the rest.
 | <img src=".github/suite/collector.png" width="36"> | **[NorgannonDB Collector](https://github.com/zmarotrix/NorgannonDBCollector)** | Help map Azeroth: improves the database while you play |
 | <img src=".github/suite/retrospect.png" width="36"> | **[Retrospect](https://github.com/zmarotrix/Retrospect)** | Your characters, account-wide: what each one has, knows and has waiting |
 | <img src=".github/suite/dimension.png" width="36"> | **[Dimension](https://github.com/zmarotrix/Dimension)** | Your bags, looked after: sells what's safe, frees space, runs bank trips, and says why |
-| <img src=".github/suite/council.png" width="36"> | **[Council](https://github.com/zmarotrix/Council)** | Your guild's loot and records: reserves, rolls, master loot and who got what |
-| <img src=".github/suite/muster.png" width="36"> | **[Muster](https://github.com/zmarotrix/Muster)** | Guild recruitment, without the spam |
 | <img src=".github/suite/mercy.png" width="36"> | **[Mercy](https://github.com/zmarotrix/Mercy)** | Healer frames: click to heal, with the debuffs you can remove lit up |
 | <img src=".github/suite/bulwark.png" width="36"> | **Bulwark** | Combat and aggro on enemy nameplates |
-| <img src=".github/suite/archivum.png" width="36"> | Archivum | Look anything up in game. *Coming later* |
+| | **For guilds** | |
+| <img src=".github/suite/council.png" width="36"> | **[Council](https://github.com/zmarotrix/Council)** | Your guild's loot and records: reserves, rolls, master loot and who got what |
+| <img src=".github/suite/muster.png" width="36"> | **[Muster](https://github.com/zmarotrix/Muster)** | Guild recruitment, without the spam |
 
 ## Getting started
 
