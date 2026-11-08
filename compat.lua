@@ -38,6 +38,7 @@ Compat.MAP = {
   GetAddOnInfo = "C_AddOns.GetAddOnInfo", EnableAddOn = "C_AddOns.EnableAddOn", DisableAddOn = "C_AddOns.DisableAddOn",
   UnitAura = "C_UnitAuras.GetAuraDataByIndex", UnitBuff = "C_UnitAuras.GetAuraDataByIndex",
   UnitDebuff = "C_UnitAuras.GetAuraDataByIndex", GetMouseFocus = "GetMouseFoci",
+  CastingInfo = "UnitCastingInfo", ChannelInfo = "UnitChannelInfo",
 }
 
 local function fn(path)
@@ -186,6 +187,9 @@ end
 local function aura(unit, index, filter)
   local ok, a = Core.Call(Core.Fn("C_UnitAuras", "GetAuraDataByIndex"), unit, index, filter)
   if not ok or type(a) ~= "table" or Core.IsSecret(a) then return nil end
+  -- Blizzard's own unpacker where the client has it (the exact classic order); else ours, in the same order
+  local util = rawget(_G, "AuraUtil")
+  if type(util) == "table" and type(util.UnpackAuraData) == "function" then return util.UnpackAuraData(a) end
   return a.name, a.icon, a.applications, a.dispelName, a.duration, a.expirationTime, a.sourceUnit, a.isStealable,
     a.nameplateShowPersonal, a.spellId, a.canApplyAura, a.isBossAura, a.isFromPlayerOrPlayerPet, a.nameplateShowAll,
     a.timeMod
@@ -213,6 +217,22 @@ end
 -------------------------------------------------------------------------------------------
 -- Other
 -------------------------------------------------------------------------------------------
+
+---Your own cast: classic's CastingInfo() is UnitCastingInfo("player"). Its values may be secret in combat.
+function Compat.CastingInfo()
+  local f = native("CastingInfo")
+  if f then return f() end
+  if not Core.Has(nil, "UnitCastingInfo") then return nil end
+  return UnitCastingInfo("player")
+end
+
+---Your own channel: classic's ChannelInfo() is UnitChannelInfo("player"). Its values may be secret in combat.
+function Compat.ChannelInfo()
+  local f = native("ChannelInfo")
+  if f then return f() end
+  if not Core.Has(nil, "UnitChannelInfo") then return nil end
+  return UnitChannelInfo("player")
+end
 
 ---The frame under the mouse (the first of GetMouseFoci on this client).
 function Compat.GetMouseFocus()

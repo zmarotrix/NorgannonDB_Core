@@ -2,6 +2,12 @@
 
 Earlier versions are in the git history.
 
+## 1.26.1 (2026-11-07)
+
+- `Core.Compat.CastingInfo()` and `ChannelInfo()`, classic's player-only cast calls, through `UnitCastingInfo` and
+  `UnitChannelInfo` (Forever loads Blizzard's mainline deprecation shims, which don't include them). 60 functions.
+- `Core.Compat.UnitAura` and friends use Blizzard's `AuraUtil.UnpackAuraData` where the client has it.
+
 ## 1.26.0 (2026-11-07)
 
 - `Core.Compat` covers 17 more classic functions, generated from ForeverAPI's table of what Forever dropped:
