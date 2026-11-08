@@ -13,6 +13,46 @@ Core.client = {
   locale = GetLocale(),
 }
 
+-------------------------------------------------------------------------------------------
+-- Which client (1.23). Don't trust WOW_PROJECT_ID on Forever: players and library authors report it saying
+-- Retail, so libraries that check it take Forever for Retail (HereBeDragons needed a patch for exactly this). The
+-- interface number is what tells: Forever is 16000-16999 (16001 on client 1.60.1, ForeverAPI's dump).
+-------------------------------------------------------------------------------------------
+
+local Client = {}
+Core.Client = Client
+
+---true on WoW Forever.
+function Client.IsForever() return Core.client.isForever end
+
+---The interface number from the TOC's point of view: 16001 on Forever 1.60.1.
+function Client.Interface() return interface end
+
+-- the game's own project ids, by the constant's name, for clients that aren't Forever
+local PROJECTS = {
+  { "WOW_PROJECT_CLASSIC", "classic" }, { "WOW_PROJECT_BURNING_CRUSADE_CLASSIC", "tbc" },
+  { "WOW_PROJECT_WRATH_CLASSIC", "wrath" }, { "WOW_PROJECT_CATACLYSM_CLASSIC", "cata" },
+  { "WOW_PROJECT_MISTS_CLASSIC", "mists" }, { "WOW_PROJECT_MAINLINE", "retail" },
+}
+
+---"forever", else what WOW_PROJECT_ID says ("classic", "tbc", "wrath", "cata", "mists", "retail"), else "unknown".
+function Client.Flavor()
+  if Core.client.isForever then return "forever" end
+  local id = rawget(_G, "WOW_PROJECT_ID")
+  for _, p in ipairs(PROJECTS) do
+    local value = rawget(_G, p[1])
+    if id ~= nil and value ~= nil and id == value then return p[2] end
+  end
+  return "unknown"
+end
+
+---true where the world is Classic's (Forever and the Classic Era client): its maps, zones and quests. Use this,
+---not WOW_PROJECT_ID, to pick Classic map data.
+function Client.IsClassicWorld()
+  local flavor = Client.Flavor()
+  return flavor == "forever" or flavor == "classic"
+end
+
 ---true if v is a secret value (or a table holding them) that must not be inspected.
 function Core.IsSecret(v)
   if issecretvalue and issecretvalue(v) then return true end

@@ -10,7 +10,7 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 22,
+  VERSION_MINOR = 23,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
   -- Older majors this Core still serves, with the last minor of each. Empty: the promise is the same major version

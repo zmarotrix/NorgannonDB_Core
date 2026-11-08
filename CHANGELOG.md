@@ -2,6 +2,16 @@
 
 Earlier versions are in the git history.
 
+## 1.23.0 (2026-11-07)
+
+- `Core.Compat`: the classic functions WoW Forever's client no longer has, with their classic answers:
+  `GetSpellInfo`, `GetSpellCooldown`, `GetItemInfo`, `GetContainerItemInfo`, `GetSpellBookItemInfo`, `UnitAura`
+  and 35 more (`Compat.MAP` lists them). Each uses the client's own global where there is one, else its
+  replacement in C_Spell, C_Item, C_Container, C_SpellBook or C_AddOns, reshaped to the classic return values. No
+  globals are written, so other add-ons are left alone. The harness checks the list against ForeverAPI's dump.
+- `Core.Client.IsForever()`, `Flavor()` ("forever", "classic", "retail", ...), `IsClassicWorld()` and `Interface()`:
+  which client this is, from the interface number, because `WOW_PROJECT_ID` is reported to say Retail on Forever.
+
 ## 1.22.6 (2026-11-07)
 
 - The suite's name in game is **Norgannon**, its brand name (brand/BRAND.md). NorgannonDB stays the name of the game
