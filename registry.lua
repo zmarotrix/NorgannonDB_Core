@@ -13,6 +13,7 @@ Core.SUITE = {
   { key = "council", name = "Council", folder = "Council", accent = "c3e05a", role = "Your guild's loot and records", slash = "/council" },
   { key = "muster", name = "Muster", folder = "Muster", accent = "e87ad6", role = "Guild recruitment, without the spam", slash = "/muster" },
   { key = "mercy", name = "Mercy", folder = "Mercy", accent = "ffeea0", role = "Healer frames", slash = "/mercy" },
+  { key = "bulwark", name = "Bulwark", folder = "Bulwark", accent = "3d66e8", role = "Combat & aggro", slash = "/bulwark" },
   { key = "archivum", name = "Archivum", folder = "Archivum", accent = "7cc4ff", role = "Database browser", slash = "/arch" },
 }
 Core.FAMILY = {
