@@ -2,6 +2,22 @@
 
 Earlier versions are in the git history.
 
+## 1.20.0 (2026-11-07)
+
+- API 1.20, the pieces several add-ons had each built their own copy of:
+  - `Core.Names`: who someone is when characters have a first and a last name. `Names.First`,
+    `Names.Full`, `Names.Key`, `Names.HasSurname`, `Names.Me`, `Names.IsMe`, and
+    `Names:Address(nameOrUnit)`, the full name a whisper reaches, learned from chat and add-on
+    messages. `Core.Guild.Short` is now `Names.First`.
+  - `Core:Restricted("combat" | "fight" | "send")`: one answer to "may we act now?". Combat is
+    read from `InCombatLockdown`, because the client's restriction check reads false in
+    open-world combat. Message `NORGANNON_RESTRICTIONS_CHANGED`.
+  - `UI.ActionList`: rows with a title, a line under it, right-hand text, an item's icon and
+    tooltip, and buttons. `UI.Input`: a text field in the suite's look. `UI.Tip`.
+  - Colours for states: `UI.C.good`, `bad`, `warn`, `info` and `hint`, plus `UI.State(name)`.
+    `UI.AccentText(key)` lightens an accent that is too dark to read as text (Bulwark's blue),
+    and `UI.Contrast(a, b)`.
+
 ## 1.19.0 (2026-11-07)
 
 - Core no longer needs NorgannonDB. Add-ons that don't read the game data (Muster, Mercy, Bulwark) now

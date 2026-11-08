@@ -39,12 +39,49 @@ UI.C = {
   quietTop = hex("3b302a"), quietBottom = hex("1d1714"), quietBorder = hex("8a7344"), quietText = hex("d8c79a"),
   -- the empty part of bars, sliders and switches
   track = { .165, .137, .102, 1 },
+  -- states (1.20): the values the suite's add-ons already agreed on. Use these, never your own reds and greens
+  good = hex("8fe08f"),   -- done, gained, ready, joined
+  bad = hex("ff9478"),    -- failed, lost, refused, urgent
+  warn = hex("e7b04f"),   -- waiting, getting close, old
+  info = hex("9fd0ff"),   -- a neutral notice
 }
+-- click hints in tooltips ("Click: open"): muted reads on the tooltip's dark ground; faint is too dim for words (1.20)
+UI.C.hint = UI.C.muted
+
+---|cffrrggbb for a state: UI.State("good") .. "Ready|r".
+function UI.State(name)
+  return UI.Code(UI.C[name] or UI.C.text)
+end
 
 ---The accent colour of a suite addon, by key (gold for anything unknown).
 function UI.Accent(key)
   local info = key and Core:GetAddonInfo(key)
   return info and hex(info.accent) or UI.C.goldSoft
+end
+
+local function luminance(c)
+  local function lin(v) return v <= .03928 and v / 12.92 or ((v + .055) / 1.055) ^ 2.4 end
+  return .2126 * lin(c[1]) + .7152 * lin(c[2]) + .0722 * lin(c[3])
+end
+
+---The contrast ratio of two colours (1 to 21); text wants 4.5 or more.
+function UI.Contrast(a, b)
+  local la, lb = luminance(a), luminance(b)
+  if la < lb then la, lb = lb, la end
+  return (la + .05) / (lb + .05)
+end
+
+---An add-on's accent for text (1.20): the accent itself, lightened just enough to read on the window's stone when it is
+---too dark for small text (Bulwark's blue). Use UI.Accent for marks, bars and fills.
+function UI.AccentText(key)
+  local c = UI.Accent(key)
+  local t = 0
+  local out = c
+  while UI.Contrast(out, UI.C.stone) < 4.5 and t < 1 do
+    t = t + .05
+    out = UI.Mix(c, { 1, 1, 1, c[4] or 1 }, t)
+  end
+  return out
 end
 
 ---Mix two colours: t = 0 gives a, 1 gives b.

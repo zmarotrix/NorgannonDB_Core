@@ -159,3 +159,42 @@ function Core:NextFrame(fn, key)
     Core.SafeCall(fn)
   end)
 end
+
+-------------------------------------------------------------------------------------------
+-- Restrictions (1.20): one answer to "may we act now?". The client's own restriction check read
+-- false in open-world combat (ApiProbe, 2026-11-07), so combat is InCombatLockdown's call.
+-------------------------------------------------------------------------------------------
+
+-- what each question checks: the client's restriction kinds (Enum.AddOnRestrictionType) and chat lockdown
+local KINDS = {
+  combat = { combat = true },
+  fight = { combat = true, kinds = { "Encounter", "ChallengeMode", "PvPMatch" } },  -- a fight or a match of any kind
+  send = { lockdown = true, kinds = { "Chat", "Encounter", "ChallengeMode", "PvPMatch" } },   -- add-on messages
+}
+
+local function restrictionActive(name)
+  local enum = rawget(_G, "Enum") and Enum.AddOnRestrictionType
+  local value = enum and enum[name]
+  if value == nil then return false end
+  return Core.In("C_RestrictedActions", "IsAddOnRestrictionActive", value) == true
+end
+
+---Why `what` can't happen now, or nil when it can. what: "combat" (protected frames), "fight" (anything a player
+---wouldn't want to happen mid-fight: moving items, popups; combat, an encounter, M+ or a PvP match) or "send" (add-on
+---messages: chat lockdown, or a restriction that covers them). Reasons: "combat", "lockdown" or a restriction's name.
+function Core:Restricted(what)
+  local spec = KINDS[what or "fight"] or KINDS.fight
+  if spec.combat and InCombatLockdown and InCombatLockdown() then return "combat" end
+  if spec.lockdown and Core.In("C_ChatInfo", "InChatMessagingLockdown") then return "lockdown" end
+  for _, name in ipairs(spec.kinds or {}) do
+    if restrictionActive(name) then return name end
+  end
+  return nil
+end
+
+-- NORGANNON_RESTRICTIONS_CHANGED when combat or any restriction starts or ends, so add-ons can hold and resume
+for _, event in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_RESTRICTION_STATE_CHANGED" }) do
+  Core:On(event, "core.restrictions", function()
+    Core:NextFrame(function() Core:Send("NORGANNON_RESTRICTIONS_CHANGED") end, "core.restrictions")
+  end)
+end

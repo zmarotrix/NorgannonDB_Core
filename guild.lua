@@ -45,9 +45,7 @@ end
 ---Who someone is, from any form of their name: "Tyrant Kuma", "Tyrant-Realm" and "Tyrant" are all "Tyrant".
 ---nil for a secret or empty name.
 function Guild.Short(name)
-  if type(name) ~= "string" or Core.IsSecret(name) or name == "" then return nil end
-  name = name:match("^%S+") or name
-  return call("Ambiguate", name, "none") or name
+  return Core.Names.First(name)   -- names.lua (1.20)
 end
 
 -------------------------------------------------------------------------------------------

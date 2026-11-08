@@ -10,7 +10,7 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 19,
+  VERSION_MINOR = 20,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
   -- Older majors this Core still serves, through shims, with the last minor of each: the promise is that a new
