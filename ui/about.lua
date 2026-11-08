@@ -32,7 +32,7 @@ local function build()
   glow:SetHeight(70)
   UI.Gradient(glow, C.goldSoft, C.goldSoft, .1, 0)
 
-  f.mark = UI.Mark(f, "norgannondb", 36)
+  f.mark = UI.Mark(f, "core", 36)
   f.mark:SetPoint("TOPLEFT", 14, -14)
   f.title = UI.Text(f, "title", 19, C.goldSoft)
   f.title:SetPoint("TOPLEFT", f.mark, "TOPRIGHT", 10, -2)

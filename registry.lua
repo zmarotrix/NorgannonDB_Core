@@ -18,6 +18,7 @@ Core.SUITE = {
 }
 Core.FAMILY = {
   { key = "norgannondb", name = "NorgannonDB", folder = "NorgannonDB", accent = "e7c66c", role = "The shared game database" },
+  { key = "core", name = "NorgannonDB Core", folder = "NorgannonDB_Core", accent = "a6e4ff", role = "The core of the suite" },
   { key = "collector", name = "Collector", folder = "NorgannonDBCollector", accent = "6fdc8c", role = "Help map Azeroth", kicker = "NorgannonDB", slash = "/ndbc" },
 }
 

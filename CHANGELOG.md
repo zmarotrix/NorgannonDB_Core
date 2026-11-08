@@ -2,6 +2,15 @@
 
 Earlier versions are in the git history.
 
+## 1.22.1 (2026-11-07)
+
+- The Core has its own mark: a light blue four-point star (`#a6e4ff`, mark key `core`). It replaces the database
+  cylinder on the Norgannon minimap button, the minimap list, NorgannonDB's Settings page, the About card, the
+  game's add-on list (TOC icon), and as the mark for add-ons outside the suite. "Powered by NorgannonDB" in every
+  window's footer shows a small star instead of the database icon.
+- The NorgannonDB data add-on keeps the gold database cylinder: that one is the data, the star is the suite's core.
+- `Core.FAMILY` gains `core` (NorgannonDB Core), so `UI.Accent("core")` and the UI gallery know it.
+
 ## 1.22.0 (2026-11-07)
 
 Memory. In game the Core showed 23.5 MB after two minutes of questing; it was two things, both fixed.

@@ -281,7 +281,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local function build()
-  local w = UI.Window({ name = "NorgannonCoreGallery", addon = "norgannondb", title = "UI kit", sub = "NorgannonDB_Core " .. Core:Version(),
+  local w = UI.Window({ name = "NorgannonCoreGallery", addon = "core", title = "UI kit", sub = "NorgannonDB_Core " .. Core:Version(),
     width = 940, height = 700, footer = true })
 
   -- accent switcher across the top

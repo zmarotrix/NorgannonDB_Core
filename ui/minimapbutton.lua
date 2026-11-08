@@ -298,7 +298,7 @@ local function newRow(flyout)
   row.hover:SetAllPoints()
   row.hover:SetColorTexture(1, 1, 1, .06)
   row.hover:Hide()
-  row.mark = UI.Mark(row, "norgannondb", 24)
+  row.mark = UI.Mark(row, "core", 24)
   row.mark:SetPoint("LEFT", 6, 0)
   row.pin = CreateFrame("Button", nil, row)
   row.pin:SetSize(20, 20)
@@ -419,7 +419,7 @@ function MB:ToggleFlyout(show)
 end
 
 local function buildMain()
-  local b = roundButton("NorgannonMinimapButton", "norgannondb", store, MAIN_ANGLE,
+  local b = roundButton("NorgannonMinimapButton", "core", store, MAIN_ANGLE,
     function(_, button)
       GameTooltip:Hide()
       if button == "RightButton" then

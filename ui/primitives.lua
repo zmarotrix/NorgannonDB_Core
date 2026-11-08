@@ -165,8 +165,8 @@ end
 function UI.MarkPath(key)
   local info = key and Core:GetAddonInfo(key)
   if info and info.mark then return info.mark end
-  -- the Core has a mark for each add-on in its registry; anything else shows NorgannonDB's
-  return UI.MEDIA .. "marks\\" .. ((info and not info.external) and key or "norgannondb")
+  -- the Core has a mark for each add-on in its registry; anything else shows the Core's star
+  return UI.MEDIA .. "marks\\" .. ((info and not info.external) and key or "core")
 end
 
 ---A suite addon's mark (gold disc with its symbol).

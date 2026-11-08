@@ -101,7 +101,7 @@ local function buildPage()
   local page = CreateFrame("Frame")
   page:Hide()
 
-  local mark = UI.Mark(page, "norgannondb", 48)
+  local mark = UI.Mark(page, "core", 48)
   mark:SetPoint("TOPLEFT", SIDE, -14)
   local title = UI.Text(page, "title", 26, C.goldSoft)
   title:SetPoint("TOPLEFT", mark, "TOPRIGHT", 12, -2)
