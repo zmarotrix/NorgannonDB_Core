@@ -166,14 +166,13 @@ end
 
 ---The flyout's status line for an addon: the last line of its tooltip that is neither its name
 ---nor a click hint (a live status like "3 replies wait for you" comes after the role line), else
----the role from the suite registry. Returns text, colour.
+---the role from the suite registry. Returns text, colour (always muted).
 function MB:Status(key)
   local lines = MB.TooltipLines(key)
   for i = #lines, 2, -1 do
     local line = lines[i]
     if line[1] ~= "" and not isHint(line[1]) then
-      local plain = line[2] == nil or (line[2] == 1 and line[3] == 1 and line[4] == 1)
-      return line[1], plain and C.muted or { line[2], line[3], line[4] }
+      return line[1], C.muted   -- always grey: the name above carries the add-on's colour
     end
   end
   local info = Core:GetAddonInfo(key)

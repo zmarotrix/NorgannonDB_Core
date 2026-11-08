@@ -2,6 +2,11 @@
 
 Earlier versions are in the git history.
 
+## 1.26.2 (2026-11-08)
+
+- The minimap flyout's second line is always grey; only the add-on's name carries its colour.
+- Roles: Mercy is "Healing frames" and Bulwark "Aggro management".
+
 ## 1.26.1 (2026-11-07)
 
 - `Core.Compat.CastingInfo()` and `ChannelInfo()`, classic's player-only cast calls, through `UnitCastingInfo` and

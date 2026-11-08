@@ -12,8 +12,8 @@ Core.SUITE = {
   { key = "oracle", name = "Oracle", folder = "Oracle", accent = "b48cff", role = "Dungeon & world atlas", slash = "/oracle" },
   { key = "retrospect", name = "Retrospect", folder = "Retrospect", accent = "ffb35c", role = "Alt tracker", slash = "/retro" },
   { key = "dimension", name = "Dimension", folder = "Dimension", accent = "f08a9d", role = "Bag manager", slash = "/dim" },
-  { key = "mercy", name = "Mercy", folder = "Mercy", accent = "ffeea0", role = "Healer frames", slash = "/mercy" },
-  { key = "bulwark", name = "Bulwark", folder = "Bulwark", accent = "3d66e8", role = "Threat & aggro", slash = "/bulwark" },
+  { key = "mercy", name = "Mercy", folder = "Mercy", accent = "ffeea0", role = "Healing frames", slash = "/mercy" },
+  { key = "bulwark", name = "Bulwark", folder = "Bulwark", accent = "3d66e8", role = "Aggro management", slash = "/bulwark" },
   -- for guilds: part of the suite, shown after it under their own heading
   { key = "council", name = "Council", folder = "Council", accent = "c3e05a", role = "Guild loot & records", slash = "/council", group = "guild" },
   { key = "muster", name = "Muster", folder = "Muster", accent = "e87ad6", role = "Guild recruiting", slash = "/muster", group = "guild" },
