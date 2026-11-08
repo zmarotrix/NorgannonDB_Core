@@ -13,8 +13,8 @@ local Core = {
   VERSION_MINOR = 20,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
-  -- Older majors this Core still serves, through shims, with the last minor of each: the promise is that a new
-  -- major keeps the previous one working for one release (docs/dev/compatibility.md). Empty while we're on 1.x.
+  -- Older majors this Core still serves, with the last minor of each. Empty: the promise is the same major version
+  -- only (an add-on written for 1.x runs on any later 1.x). Kept so a future major could serve 1.x if it ever must.
   COMPAT = {},
 }
 NorgannonCore = Core

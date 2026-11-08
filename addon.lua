@@ -11,7 +11,7 @@
 --   })
 --   if A.disabled then return end
 --
--- docs/dev/getting-started.md walks through it; templates/NorgannonTemplate is a working example.
+-- docs/dev/getting-started.md walks through it; tools/harness/fixtures/NorgannonTemplate is a working example.
 
 local Core = NorgannonCore
 local UI = Core.UI
