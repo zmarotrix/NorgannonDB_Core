@@ -204,7 +204,7 @@ end
 
 -- gives a pooled pin frame this pin's look and behaviour
 local function dress(f, pin, size, alpha)
-  local tintable = setIcon(f.icon, pin.icon)
+  local tintable = Icons.SetOwned(f.icon, pin.icon)
   local c = pinColor(pin)
   if c and tintable then
     f.icon:SetVertexColor(c[1], c[2], c[3])

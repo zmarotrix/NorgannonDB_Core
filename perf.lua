@@ -225,9 +225,10 @@ end
 ---(default 10) with the collector paused, then the growth per second. The collector restarts
 ---at the end; if the client refuses to pause it, the numbers can come out low.
 ---
----It also says where the Core's share comes from: the KB made inside each timed Core function
----(the /norg perf list), and, per game event the Core dispatches for the suite, how many came
----and the KB made while its listeners ran. A game event's own arguments (UNIT_AURA's
+---It also says where the Core's share comes from: the KB made inside every function on the
+---Core's tables (Core, Core.UI, Core.Map, ...) and the timed add-on functions (the /norg perf
+---list), each counted without what the other wrapped functions inside it made; and, per game
+---event the Core dispatches for the suite, how many came and the KB made while its listeners ran. A game event's own arguments (UNIT_AURA's
 ---updateInfo table, for one) are made by the client as it hands the event to the Core's event
 ---frame, so they count against the Core but show in neither list: that's the "rest" line.
 local RATE_LINES = 8
@@ -240,21 +241,47 @@ function Perf:MemoryRate(seconds)
   local events, functions = {}, {}
   local open = {}   -- event -> KB when its dispatch started (dispatches can nest)
 
-  -- KB made inside each timed function, with the collector paused (exact)
-  local wrapped = {}
+  -- KB made inside each function, with the collector paused (exact). Each counts only its own:
+  -- what wrapped functions it calls is taken off (a stack of what the callees made).
+  local wrapped, seen = {}, {}
+  local childKB, depth = {}, 0
+  local function wrapOne(tbl, method, label)
+    local original = rawget(tbl, method)
+    if type(original) ~= "function" or seen[original] then return end
+    seen[original] = true
+    local stat = functions[label] or { kb = 0, calls = 0 }
+    functions[label] = stat
+    local function finish(before, ...)
+      local inclusive = count("count") - before
+      local own = inclusive - childKB[depth]
+      depth = depth - 1
+      if depth > 0 then childKB[depth] = childKB[depth] + inclusive end
+      stat.kb, stat.calls = stat.kb + own, stat.calls + 1
+      return ...
+    end
+    tbl[method] = function(...)
+      depth = depth + 1
+      childKB[depth] = 0
+      return finish(count("count"), original(...))
+    end
+    wrapped[#wrapped + 1] = { tbl = tbl, method = method, original = original }
+  end
   if not self.running then
-    for _, entry in ipairs(self.entries) do
-      local original = entry.tbl[entry.method]
-      if type(original) == "function" then
-        local stat = { kb = 0, calls = 0 }
-        functions[entry.label] = stat
-        local function finish(before, ...)
-          stat.kb, stat.calls = stat.kb + count("count") - before, stat.calls + 1
-          return ...
-        end
-        entry.tbl[entry.method] = function(...) return finish(count("count"), original(...)) end
-        wrapped[#wrapped + 1] = { entry = entry, original = original }
+    for _, entry in ipairs(self.entries) do wrapOne(entry.tbl, entry.method, entry.label) end
+  end
+  -- not the measuring itself, nor what must stay the same function while it runs
+  local SKIP = { Perf = true, SetEventTap = true, MemoryRate = true, Memory = true, MemoryByAddon = true }
+  local function wrapTable(tbl, prefix)
+    for key, value in pairs(tbl) do
+      if type(key) == "string" and not SKIP[key] and type(value) == "function" then
+        wrapOne(tbl, key, prefix .. key)
       end
+    end
+  end
+  wrapTable(Core, "Core:")
+  for key, value in pairs(Core) do
+    if type(key) == "string" and not SKIP[key] and type(value) == "table" and value ~= Core and not value.GetObjectType then
+      wrapTable(value, "Core." .. key .. ":")
     end
   end
 
@@ -277,7 +304,10 @@ function Perf:MemoryRate(seconds)
   Core:Print(string.format("measuring memory growth for %d s: play normally", seconds))
   C_Timer.After(seconds, function()
     Core:SetEventTap(nil)
-    for _, w in ipairs(wrapped) do w.entry.tbl[w.entry.method] = w.original end
+    for i = #wrapped, 1, -1 do
+      local w = wrapped[i]
+      w.tbl[w.method] = w.original
+    end
     if paused then pcall(collectgarbage, "restart") end
     self.rating = nil
     local coreGrew = 0
@@ -294,7 +324,7 @@ function Perf:MemoryRate(seconds)
       inFunctions = inFunctions + stat.kb
     end
     table.sort(list, function(a, b) return a.kb > b.kb end)
-    Core:Print("  the Core's timed functions (KB/s made inside, with anything they called):")
+    Core:Print("  the Core's functions and the timed ones (KB/s made in each, not counting the others it called):")
     for i = 1, math.min(RATE_LINES, #list) do
       Core:Print(string.format("    %s: %.1f KB/s, %d calls", list[i].label, list[i].kb / seconds, list[i].n))
     end
@@ -310,7 +340,7 @@ function Perf:MemoryRate(seconds)
     for i = 1, math.min(RATE_LINES, #list) do
       Core:Print(string.format("    %s: %d (%.0f/s), %.1f KB/s", list[i].label, list[i].n, list[i].n / seconds, list[i].kb / seconds))
     end
-    Core:Print(string.format("  the Core grew %.1f KB/s; its timed functions made %.1f KB/s; the rest is mostly game events' own arguments",
+    Core:Print(string.format("  the Core grew %.1f KB/s; the functions above made %.1f KB/s; the rest is code the Core's tables don't reach (local functions, frame scripts) and game events' own arguments",
       coreGrew / seconds, inFunctions / seconds))
   end)
 end

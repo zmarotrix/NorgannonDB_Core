@@ -2,6 +2,23 @@
 
 Earlier versions are in the git history.
 
+## 1.22.2 (2026-11-07)
+
+Memory, measured in game with `/norg mem rate`: the Core was still making about 173 KB of garbage a second.
+
+- The compass made about 650 bytes per frame while you moved or turned, because the game's `C_Texture.GetAtlasInfo`
+  makes a new table on every call, and every marker asked it on every frame. Whether the client has an atlas is
+  now asked once per atlas. The compass's markers and the map's pin frames only set an icon when it changes
+  (`Core.MapIcons.SetOwned`; `Core.MapIcons.Reset()` forgets both).
+- `/norg mem rate` now measures every function on the Core's tables (`Core`, `Core.UI`, `Core.Map`, ...) as well as
+  the timed ones. Each is counted without what the other measured functions inside it made, so the rest is
+  narrowed to local code and the game events' own arguments.
+- `/norg mem` says how the last minimap pass went: drawn, minimap hidden, or no player position; the pins it
+  looked at and found inside; the view radius; and your instance beside the pins' instances. In game it had drawn
+  no pins since the reload.
+- `/norg mem rate` lists the busiest game events the Core passed to the suite, with KB/s made by their listeners
+  (`Core:SetEventTap`).
+
 ## 1.22.1 (2026-11-07)
 
 - The Core has its own mark: a light blue four-point star (`#a6e4ff`, mark key `core`). It replaces the database

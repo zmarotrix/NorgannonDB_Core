@@ -236,7 +236,7 @@ local function drawMarkers(px, py, instance, facing)
       local closeness = 1 - math.max(0, math.min(1, (distance - NEAR) / (FAR - NEAR)))
       local size = t.pin.focus and FOCUS_MARKER or (MARKER_MIN + (MARKER_MAX - MARKER_MIN) * closeness)
       m:SetSize(size, size)
-      local tintable = Core.Map.SetIcon(m.icon, t.pin.icon)
+      local tintable = Core.MapIcons.SetOwned(m.icon, t.pin.icon)
       local c = Core.Map.PinColor(t.pin)
       if c and tintable then
         m.icon:SetVertexColor(c[1], c[2], c[3])

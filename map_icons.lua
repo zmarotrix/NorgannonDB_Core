@@ -51,8 +51,16 @@ for key, spec in pairs(SERVICE_ICONS) do
 end
 Icons.SERVICE_ICONS = SERVICE_ICONS
 
+-- Whether the client has an atlas, asked once per name: GetAtlasInfo makes a new table on every
+-- call, and the compass and minimap set icons many times a second.
+local atlasKnown = {}
 local function hasAtlas(name)
-  return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+  local known = atlasKnown[name]
+  if known == nil then
+    known = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil or false
+    atlasKnown[name] = known
+  end
+  return known
 end
 
 -- a square icon cropped to a circle: trimmed border and a round mask (made once per frame)
@@ -126,3 +134,19 @@ local function setIcon(tex, name)
   return spec.tint or false
 end
 Icons.Set = setIcon
+
+---setIcon for a texture only the Core sets (pin frames, compass markers): does nothing when it
+---already shows that icon, and returns the same answer.
+local generation = 0   -- bumped by Icons.Reset: every owned texture sets its icon again
+function Icons.SetOwned(tex, name)
+  if tex.ndbIcon == name and tex.ndbGen == generation then return tex.ndbTint end
+  local tint = setIcon(tex, name)
+  tex.ndbIcon, tex.ndbTint, tex.ndbGen = name, tint, generation
+  return tint
+end
+
+---Forgets which atlases the client has and what owned textures show (the harness swaps clients).
+function Icons.Reset()
+  atlasKnown = {}
+  generation = generation + 1
+end
