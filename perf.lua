@@ -212,6 +212,9 @@ function Perf:Memory()
   local m = Core.Map:MemoryStats()
   Core:Print(string.format("  map: %d pins from %d owners in %d areas, %d world positions cached, %d overlap keys; frames: %d world, %d minimap, %d glows",
     m.pins, m.owners, m.areas, m.worldPositions, m.overlapKeys, m.worldFrames, m.minimapFrames, m.glowFrames))
+  Core:Print(string.format("  minimap: %s, %d of %d pins inside, %d drawn; view radius %s, your instance %s, pin instances %s",
+    m.minimapState, m.minimapInside, m.minimapConsidered, m.minimapDrawn, tostring(m.minimapRadius), tostring(m.minimapInstance),
+    m.pinInstances ~= "" and m.pinInstances or "none"))
   local c = Core.Compass:MemoryStats()
   Core:Print(string.format("  compass: %d targets, %d marker frames", c.targets, c.markerFrames))
   Core:Print(string.format("  names: %d people by GUID, %d by first name; party progress from %d players",
@@ -221,20 +224,94 @@ end
 ---Measures how fast each suite add-on makes garbage: a full collection, then `seconds` of play
 ---(default 10) with the collector paused, then the growth per second. The collector restarts
 ---at the end; if the client refuses to pause it, the numbers can come out low.
+---
+---It also says where the Core's share comes from: the KB made inside each timed Core function
+---(the /norg perf list), and, per game event the Core dispatches for the suite, how many came
+---and the KB made while its listeners ran. A game event's own arguments (UNIT_AURA's
+---updateInfo table, for one) are made by the client as it hands the event to the Core's event
+---frame, so they count against the Core but show in neither list: that's the "rest" line.
+local RATE_LINES = 8
+
 function Perf:MemoryRate(seconds)
   seconds = seconds or 10
+  if self.rating then Core:Print("already measuring memory growth") return end
+  self.rating = true
+  local count = collectgarbage
+  local events, functions = {}, {}
+  local open = {}   -- event -> KB when its dispatch started (dispatches can nest)
+
+  -- KB made inside each timed function, with the collector paused (exact)
+  local wrapped = {}
+  if not self.running then
+    for _, entry in ipairs(self.entries) do
+      local original = entry.tbl[entry.method]
+      if type(original) == "function" then
+        local stat = { kb = 0, calls = 0 }
+        functions[entry.label] = stat
+        local function finish(before, ...)
+          stat.kb, stat.calls = stat.kb + count("count") - before, stat.calls + 1
+          return ...
+        end
+        entry.tbl[entry.method] = function(...) return finish(count("count"), original(...)) end
+        wrapped[#wrapped + 1] = { entry = entry, original = original }
+      end
+    end
+  end
+
   local start = {}
   for _, m in ipairs(memoryByAddon(true)) do start[m.name] = m.kb end
   local paused = pcall(collectgarbage, "stop")
+  Core:SetEventTap(function(event, starting)
+    if starting then
+      open[event] = count("count")
+    elseif open[event] then
+      local e = events[event]
+      if not e then
+        e = { n = 0, kb = 0 }
+        events[event] = e
+      end
+      e.n, e.kb = e.n + 1, e.kb + count("count") - open[event]
+      open[event] = nil
+    end
+  end)
   Core:Print(string.format("measuring memory growth for %d s: play normally", seconds))
   C_Timer.After(seconds, function()
+    Core:SetEventTap(nil)
+    for _, w in ipairs(wrapped) do w.entry.tbl[w.entry.method] = w.original end
     if paused then pcall(collectgarbage, "restart") end
-    local now = memoryByAddon(false)
-    for _, m in ipairs(now) do
+    self.rating = nil
+    local coreGrew = 0
+    for _, m in ipairs(memoryByAddon(false)) do
       local grew = m.kb - (start[m.name] or m.kb)
+      if m.name == "NorgannonDB_Core" then coreGrew = grew end
       Core:Print(string.format("  %s: %+.1f KB/s", m.name, grew / seconds))
     end
     if not paused then Core:Print("  (the collector couldn't be paused; it may have run meanwhile)") end
+
+    local list, inFunctions = {}, 0
+    for label, stat in pairs(functions) do
+      if stat.calls > 0 then list[#list + 1] = { label = label, kb = stat.kb, n = stat.calls } end
+      inFunctions = inFunctions + stat.kb
+    end
+    table.sort(list, function(a, b) return a.kb > b.kb end)
+    Core:Print("  the Core's timed functions (KB/s made inside, with anything they called):")
+    for i = 1, math.min(RATE_LINES, #list) do
+      Core:Print(string.format("    %s: %.1f KB/s, %d calls", list[i].label, list[i].kb / seconds, list[i].n))
+    end
+    list = {}
+    local eventCount = 0
+    for event, e in pairs(events) do
+      list[#list + 1] = { label = event, kb = e.kb, n = e.n }
+      eventCount = eventCount + e.n
+    end
+    table.sort(list, function(a, b) return a.n > b.n end)
+    Core:Print(string.format("  game events the Core handed to the suite: %d (%.0f a second); the busiest, with KB/s their listeners made:",
+      eventCount, eventCount / seconds))
+    for i = 1, math.min(RATE_LINES, #list) do
+      Core:Print(string.format("    %s: %d (%.0f/s), %.1f KB/s", list[i].label, list[i].n, list[i].n / seconds, list[i].kb / seconds))
+    end
+    Core:Print(string.format("  the Core grew %.1f KB/s; its timed functions made %.1f KB/s; the rest is mostly game events' own arguments",
+      coreGrew / seconds, inFunctions / seconds))
   end)
 end
 

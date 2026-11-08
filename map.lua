@@ -474,8 +474,14 @@ local function nearer(a, b) return visD[a] < visD[b] end
 
 function Map:RefreshMinimap()
   local n = 0
-  if Minimap:IsVisible() and prepareMinimap() then
+  local stats = Map.stats
+  stats.minimapState = not Minimap:IsVisible() and "minimap hidden" or nil
+  stats.minimapConsidered, stats.minimapInside = 0, 0
+  if not stats.minimapState and not prepareMinimap() then stats.minimapState = "no player position" end
+  if not stats.minimapState then
     if indexDirty then rebuildIndex() end
+    stats.minimapState = "drawn"
+    stats.minimapRadius, stats.minimapInstance = view.radius, view.instance
     local count = 0
     for area, pins in pairs(byArea) do
       local instance = areaInstance[area]
@@ -488,6 +494,7 @@ function Map:RefreshMinimap()
       if instance == view.instance then
         for _, pin in ipairs(pins) do
           if pin.minimap ~= false then
+            stats.minimapConsidered = stats.minimapConsidered + 1
             local x, y, distance, inside = minimapOffset(pin, MINIMAP_EDGE_MARGIN)
             if inside then
               count = count + 1
@@ -499,6 +506,7 @@ function Map:RefreshMinimap()
     end
     for i = count + 1, visLast do visOrder[i], visPin[i] = nil, nil end   -- let go of last pass's pins
     visLast = count
+    stats.minimapInside = count
     if count > MINIMAP_MAX then
       table.sort(visOrder, nearer)
       for i = MINIMAP_MAX + 1, count do visOrder[i] = nil end
@@ -613,6 +621,17 @@ function Map:MemoryStats()
   for _ in pairs(byArea) do out.areas = out.areas + 1 end
   for _ in pairs(worldPos) do out.worldPositions = out.worldPositions + 1 end
   for _ in pairs(drawn) do out.overlapKeys = out.overlapKeys + 1 end
+  local s = self.stats
+  out.minimapState, out.minimapDrawn, out.minimapConsidered, out.minimapInside = s.minimapState or "not run", s.minimap or 0,
+    s.minimapConsidered or 0, s.minimapInside or 0
+  out.minimapRadius, out.minimapInstance = s.minimapRadius, s.minimapInstance
+  -- which instances the pins are in, against the player's
+  local instances = {}
+  for _, list in pairs(byArea) do
+    local _, _, inst = worldOf(list[1])
+    instances[#instances + 1] = tostring(inst)
+  end
+  out.pinInstances = table.concat(instances, " ")
   return out
 end
 

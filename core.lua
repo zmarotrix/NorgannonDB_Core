@@ -119,11 +119,20 @@ function Core:Off(event, owner)
   end
 end
 
+-- eventTap(event, starting) brackets each dispatch while /norg mem rate measures; nil otherwise
+local eventTap = nil
+
 eventFrame:SetScript("OnEvent", function(_, event, ...)
   local list = handlers[event]
   if not list then return end
+  local tap = eventTap
+  if tap then tap(event, true) end
   for _, fn in pairs(list) do call(fn, event, ...) end
+  if tap then tap(event, false) end
 end)
+
+---For measuring (/norg mem rate): fn(event, starting) around every game event the Core dispatches; nil stops.
+function Core:SetEventTap(fn) eventTap = fn end
 
 -------------------------------------------------------------------------------------------
 -- Messages between suite addons (and inside the Core)
