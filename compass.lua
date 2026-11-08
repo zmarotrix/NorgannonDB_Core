@@ -192,7 +192,12 @@ local function collectTargets(px, py, instance)
   table.sort(targets, byDistance)
   -- only the nearest fit
   for i = MAX_MARKERS + 1, #targets do targets[i] = nil end
-  for i = #targets + 1, #pool do pool[i].pin = nil end   -- let go of pins that are no longer targets
+  -- let go of pins that are no longer targets. The sort mixes up the records, so a kept target can
+  -- be any record in the pool, not just the first #targets
+  for _, t in ipairs(targets) do t.kept = true end
+  for _, t in ipairs(pool) do
+    if t.kept then t.kept = nil else t.pin = nil end
+  end
   drawDirty = true
 end
 

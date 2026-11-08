@@ -2,6 +2,12 @@
 
 Earlier versions are in the git history.
 
+## 1.23.1 (2026-11-07)
+
+- Fixed: with more than 24 objectives near you, the compass stopped and the game reported
+  "compass.lua:237: attempt to index field 'pin'" many times over. Since 1.22.2 the compass could let go of the pin
+  of a marker it was still showing. The harness now tries 40 nearby objectives.
+
 ## 1.23.0 (2026-11-07)
 
 - `Core.Compat`: the classic functions WoW Forever's client no longer has, with their classic answers:
