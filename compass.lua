@@ -324,6 +324,7 @@ f:SetScript("OnUpdate", function(_, dt) Compass:Update(dt) end)
 -- A hidden frame gets no OnUpdate, and the strip hides when there is nothing to show, so this
 -- always-running frame is what notices when there is something again.
 local driver = CreateFrame("Frame")
+Compass.driver = driver
 local idle = 0
 driver:SetScript("OnUpdate", function(_, dt)
   if f:IsShown() then return end

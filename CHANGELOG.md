@@ -2,6 +2,15 @@
 
 Earlier versions are in the git history.
 
+## 1.22.3 (2026-11-07)
+
+- The minimap's view radius on a client without `C_Minimap.GetViewRadius` (Forever) is now the classic client's
+  size for the zoom level, indoors or outdoors: 233 yards out to 67 outdoors, 150 to 25 indoors. It was a fixed 150.
+- `/norg mem` names the nearest pin to you on the minimap pass.
+- `/norg mem rate` measures how long it really ran and how many frames, how much everything together grew, and the
+  KB made in each of the Core's own frame scripts (map driver, compass, arrow, HereBeDragons, ChatThrottleLib),
+  which no table reaches. `Core.Map.driver` and `Core.Compass.driver` are exposed for it.
+
 ## 1.22.2 (2026-11-07)
 
 Memory, measured in game with `/norg mem rate`: the Core was still making about 173 KB of garbage a second.

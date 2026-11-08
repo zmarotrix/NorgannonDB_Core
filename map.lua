@@ -429,6 +429,22 @@ end
 local miniPins = {}
 local view = {}   -- the player and the minimap for this refresh; filled by prepareMinimap
 
+-- Yards from the minimap's centre to its edge at each zoom level (0 = farthest out), for a client
+-- without C_Minimap.GetViewRadius: the classic client's fixed sizes, outdoors and indoors.
+local MINIMAP_RADIUS = {
+  outdoor = { [0] = 233 + 1 / 3, 200, 166 + 2 / 3, 133 + 1 / 3, 100, 66 + 2 / 3 },
+  indoor = { [0] = 150, 120, 90, 60, 40, 25 },
+}
+
+local function minimapRadius()
+  if C_Minimap and C_Minimap.GetViewRadius then return C_Minimap.GetViewRadius() end
+  if Minimap.GetViewRadius then return Minimap:GetViewRadius() end
+  local zoom = Minimap.GetZoom and Minimap:GetZoom() or 0
+  local sizes = (IsIndoors and IsIndoors()) and MINIMAP_RADIUS.indoor or MINIMAP_RADIUS.outdoor
+  return sizes[zoom] or sizes[0]
+end
+Map.MinimapRadius = minimapRadius
+
 local function prepareMinimap()
   local px, py, instance = HBD:GetPlayerWorldPosition()
   if not px or Core.IsSecret(px) then return false end
@@ -437,8 +453,7 @@ local function prepareMinimap()
   if rotate and (not facing or Core.IsSecret(facing)) then return false end
   view.x, view.y, view.instance = px, py, instance
   view.rotate, view.sin, view.cos = rotate, math.sin(facing), math.cos(facing)
-  view.radius = (C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius())
-    or (Minimap.GetViewRadius and Minimap:GetViewRadius()) or 150
+  view.radius = minimapRadius()
   view.halfw, view.halfh = Minimap:GetWidth() / 2, Minimap:GetHeight() / 2
   view.shape = Core.MinimapShape()
   return true
@@ -452,6 +467,8 @@ local function minimapOffset(pin, margin)
   local wx, wy, instance = worldOf(pin)
   if not wx or instance ~= view.instance then return end
   local east, north = view.x - wx, wy - view.y
+  local d2 = east * east + north * north
+  if d2 < (view.nearest or math.huge) then view.nearest = d2 end
   if view.rotate then east, north = east * view.cos + north * view.sin, north * view.cos - east * view.sin end
   local x, y = east / view.radius * view.halfw, north / view.radius * view.halfh
   local distance = math.sqrt(x * x + y * y)
@@ -482,6 +499,7 @@ function Map:RefreshMinimap()
     if indexDirty then rebuildIndex() end
     stats.minimapState = "drawn"
     stats.minimapRadius, stats.minimapInstance = view.radius, view.instance
+    view.nearest = math.huge
     local count = 0
     for area, pins in pairs(byArea) do
       local instance = areaInstance[area]
@@ -507,6 +525,7 @@ function Map:RefreshMinimap()
     for i = count + 1, visLast do visOrder[i], visPin[i] = nil, nil end   -- let go of last pass's pins
     visLast = count
     stats.minimapInside = count
+    stats.minimapNearest = view.nearest < math.huge and math.sqrt(view.nearest) or nil
     if count > MINIMAP_MAX then
       table.sort(visOrder, nearer)
       for i = MINIMAP_MAX + 1, count do visOrder[i] = nil end
@@ -595,6 +614,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local driver = CreateFrame("Frame")
+Map.driver = driver
 local elapsed = 0
 driver:SetScript("OnUpdate", function(_, dt)
   if Map.pulse then applyPulse() end
@@ -624,7 +644,7 @@ function Map:MemoryStats()
   local s = self.stats
   out.minimapState, out.minimapDrawn, out.minimapConsidered, out.minimapInside = s.minimapState or "not run", s.minimap or 0,
     s.minimapConsidered or 0, s.minimapInside or 0
-  out.minimapRadius, out.minimapInstance = s.minimapRadius, s.minimapInstance
+  out.minimapRadius, out.minimapInstance, out.minimapNearest = s.minimapRadius, s.minimapInstance, s.minimapNearest
   -- which instances the pins are in, against the player's
   local instances = {}
   for _, list in pairs(byArea) do

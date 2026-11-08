@@ -212,9 +212,11 @@ function Perf:Memory()
   local m = Core.Map:MemoryStats()
   Core:Print(string.format("  map: %d pins from %d owners in %d areas, %d world positions cached, %d overlap keys; frames: %d world, %d minimap, %d glows",
     m.pins, m.owners, m.areas, m.worldPositions, m.overlapKeys, m.worldFrames, m.minimapFrames, m.glowFrames))
-  Core:Print(string.format("  minimap: %s, %d of %d pins inside, %d drawn; view radius %s, your instance %s, pin instances %s",
-    m.minimapState, m.minimapInside, m.minimapConsidered, m.minimapDrawn, tostring(m.minimapRadius), tostring(m.minimapInstance),
-    m.pinInstances ~= "" and m.pinInstances or "none"))
+  Core:Print(string.format("  minimap: %s, %d of %d pins inside, %d drawn, nearest %s; view radius %s yd, your instance %s, pin instances %s",
+    m.minimapState, m.minimapInside, m.minimapConsidered, m.minimapDrawn,
+    m.minimapNearest and string.format("%.0f yd", m.minimapNearest) or "none",
+    m.minimapRadius and string.format("%.0f", m.minimapRadius) or "?",
+    tostring(m.minimapInstance), m.pinInstances ~= "" and m.pinInstances or "none"))
   local c = Core.Compass:MemoryStats()
   Core:Print(string.format("  compass: %d targets, %d marker frames", c.targets, c.markerFrames))
   Core:Print(string.format("  names: %d people by GUID, %d by first name; party progress from %d players",
@@ -285,8 +287,41 @@ function Perf:MemoryRate(seconds)
     end
   end
 
+  -- the Core's own frame scripts, which no table reaches: KB made in each (with what it calls)
+  local scripts = {}
+  local hbd = LibStub and LibStub("HereBeDragons-NorgannonCore-2.0", true)
+  local ctl = rawget(_G, "ChatThrottleLib")
+  local FRAMES = {
+    { "map driver", Core.Map.driver }, { "compass", Core.Compass.frame }, { "compass idle", Core.Compass.driver },
+    { "arrow", Core.Arrow and Core.Arrow.frame }, { "HereBeDragons", hbd and hbd.eventFrame },
+    { "ChatThrottleLib", ctl and ctl.Frame },
+  }
+  local swapped = {}
+  for _, pair in ipairs(FRAMES) do
+    local name, frame = pair[1], pair[2]
+    if frame and frame.GetScript then
+      for _, script in ipairs({ "OnUpdate", "OnEvent" }) do
+        local original = frame:GetScript(script)
+        if original then
+          local stat = { kb = 0, calls = 0 }
+          scripts[name .. " " .. script] = stat
+          frame:SetScript(script, function(...)
+            local before = count("count")
+            original(...)
+            stat.kb, stat.calls = stat.kb + count("count") - before, stat.calls + 1
+          end)
+          swapped[#swapped + 1] = { frame = frame, script = script, original = original }
+        end
+      end
+    end
+  end
+  local frames = 0
+  local ticker = CreateFrame("Frame")
+  ticker:SetScript("OnUpdate", function() frames = frames + 1 end)
+
   local start = {}
   for _, m in ipairs(memoryByAddon(true)) do start[m.name] = m.kb end
+  local startTotal, startTime = count("count"), GetTime()
   local paused = pcall(collectgarbage, "stop")
   Core:SetEventTap(function(event, starting)
     if starting then
@@ -301,9 +336,14 @@ function Perf:MemoryRate(seconds)
       open[event] = nil
     end
   end)
-  Core:Print(string.format("measuring memory growth for %d s: play normally", seconds))
+  Core:Print(string.format("measuring memory growth for %d s: play normally (it starts with a full collection, a short hitch)", seconds))
   C_Timer.After(seconds, function()
+    local total = count("count") - startTotal
     Core:SetEventTap(nil)
+    ticker:SetScript("OnUpdate", nil)
+    for _, w in ipairs(swapped) do w.frame:SetScript(w.script, w.original) end
+    local took = math.max(.001, GetTime() - startTime)
+    seconds = took
     for i = #wrapped, 1, -1 do
       local w = wrapped[i]
       w.tbl[w.method] = w.original
@@ -317,6 +357,17 @@ function Perf:MemoryRate(seconds)
       Core:Print(string.format("  %s: %+.1f KB/s", m.name, grew / seconds))
     end
     if not paused then Core:Print("  (the collector couldn't be paused; it may have run meanwhile)") end
+    Core:Print(string.format("  measured %.1f s, %d frames (%.0f fps); everything together grew %.1f KB/s",
+      took, frames, frames / took, total / took))
+    local lines = {}
+    for name, stat in pairs(scripts) do
+      if stat.calls > 0 then lines[#lines + 1] = { label = name, kb = stat.kb, n = stat.calls } end
+    end
+    table.sort(lines, function(a, b) return a.kb > b.kb end)
+    Core:Print("  the Core's frame scripts (KB/s made in each, with what it called):")
+    for _, l in ipairs(lines) do
+      Core:Print(string.format("    %s: %.1f KB/s, %d calls", l.label, l.kb / took, l.n))
+    end
 
     local list, inFunctions = {}, 0
     for label, stat in pairs(functions) do
