@@ -168,7 +168,7 @@ end
 -- what each question checks: the client's restriction kinds (Enum.AddOnRestrictionType) and chat lockdown
 local KINDS = {
   combat = { combat = true },
-  fight = { combat = true, kinds = { "Encounter", "ChallengeMode", "PvPMatch" } },  -- a fight or a match of any kind
+  fight = { combat = true, kinds = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" } },  -- a fight or a match of any kind
   send = { lockdown = true, kinds = { "Chat", "Encounter", "ChallengeMode", "PvPMatch" } },   -- add-on messages
 }
 

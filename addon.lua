@@ -95,8 +95,10 @@ end
 ---  data = {1, 4}     NorgannonDB's schema it needs, if it reads the game data (list NorgannonDB in the TOC too)
 ---  db, defaults, version, migrate                 account-wide saved variable (Core:SavedVars)
 ---  char, charDefaults, charVersion, charMigrate   per-character saved variable
----  slash = {"/x", ...}, commands = { name = fn(rest) | { fn(rest), "what it does" } }
+---  slash = {"/x", ...}, commands = { name = fn(rest) | { fn(rest), "what it does" } }, onUnknown = fn(msg) for any other
+---                    word (a search, say; "help" still prints the commands)
 ---  minimap = false | { onClick(button)?, onShiftClick()?, status()? -> a live line, clickHint?, shiftHint?, rightHint? }
+---  ownLoad = true    the add-on loads its own saved variables and sets A.ready itself (no db/char, no A:OnReady)
 ---
 ---A gets: key, name, addonName, info, PREFIX, ACCENT, ready, db, char; :Print, :Debug, :Send, :Listen (messages prefixed
 ---KEY_), :OnReady(fn) (saved variables loaded), :OnLogin(fn), :AddSettingsPage(frame), :OpenSettings(), :RunCommand(msg),
@@ -146,15 +148,18 @@ function Core:NewAddon(key, opts)
   function A:Listen(msg, owner, fn) Core:Listen(MSG .. msg, owner, fn) end
   function A:Unlisten(msg, owner) Core:Unlisten(MSG .. msg, owner) end
 
-  -- Load order
+  -- Load order. With ownLoad, the add-on loads its saved variables itself and sets A.ready (Clairvoyance waits for the
+  -- player as well); A:OnReady is then the add-on's to define.
   local readyQueue = {}
-  function A:OnReady(fn)
-    if self.ready then Core.SafeCall(fn) else readyQueue[#readyQueue + 1] = fn end
+  if not opts.ownLoad then
+    function A:OnReady(fn)
+      if self.ready then Core.SafeCall(fn) else readyQueue[#readyQueue + 1] = fn end
+    end
   end
   function A:OnLogin(fn) Core:OnLogin(fn) end
 
   local owner = "addon:" .. key
-  Core:On("ADDON_LOADED", owner, function(_, loaded)
+  if not opts.ownLoad then Core:On("ADDON_LOADED", owner, function(_, loaded)
     if loaded ~= folder then return end
     Core:Off("ADDON_LOADED", owner)
     if opts.db then
@@ -168,7 +173,7 @@ function Core:NewAddon(key, opts)
     local queue = readyQueue
     readyQueue = nil
     for _, fn in ipairs(queue) do Core.SafeCall(fn) end
-  end)
+  end) end
 
   Core:RegisterAddon(key, { version = metadata(folder, "Version") or "0.0.0" })
 
@@ -216,6 +221,7 @@ function Core:NewAddon(key, opts)
       return self:OpenSettings()
     end
     if cmd == "settings" or cmd == "options" or cmd == "config" then return self:OpenSettings() end
+    if cmd ~= "help" and opts.onUnknown then return opts.onUnknown(strtrim(msg or "")) end
     self:PrintHelp()
   end
   if opts.slash then

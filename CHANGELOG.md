@@ -12,6 +12,8 @@ Earlier versions are in the git history.
   - `Core:Restricted("combat" | "fight" | "send")`: one answer to "may we act now?". Combat is
     read from `InCombatLockdown`, because the client's restriction check reads false in
     open-world combat. Message `NORGANNON_RESTRICTIONS_CHANGED`.
+  - `Core:NewAddon` gains `onUnknown` (a slash command's catch-all, e.g. a search) and `ownLoad` (for an add-on that
+    loads its own saved variables and decides when it's ready).
   - `UI.ActionList`: rows with a title, a line under it, right-hand text, an item's icon and
     tooltip, and buttons. `UI.Input`: a text field in the suite's look. `UI.Tip`.
   - Colours for states: `UI.C.good`, `bad`, `warn`, `info` and `hint`, plus `UI.State(name)`.
