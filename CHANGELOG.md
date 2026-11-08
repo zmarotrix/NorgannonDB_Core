@@ -2,6 +2,13 @@
 
 Earlier versions are in the git history.
 
+## 1.21.1 (2026-11-07)
+
+- An add-on's name in its chat lines, its tooltip and the minimap flyout uses `UI.AccentText`, so a dark accent
+  (Bulwark's blue) is lightened enough to read.
+- `/norg` and NorgannonDB's Settings page opened in combat now open when the fight ends, instead of being refused.
+- The NorgannonDB card says "add-on". The README lists every suite add-on, and says which need NorgannonDB.
+
 ## 1.21.0 (2026-11-07)
 
 - `Core.Net`, add-on messages under an add-on's own prefix, taken from Council's: `Net:Channel(prefix, { onMessage })`,

@@ -150,9 +150,15 @@ Core:OnReady(function()
 end)
 
 ---Opens the suite's Settings page.
+---Opens the suite's Settings page. The game's Settings window can't open in combat: then it opens when the fight ends.
 function Core:OpenSettings()
+  if InCombatLockdown and InCombatLockdown() then
+    Core:Print("Settings open when this fight ends.")
+    Core:AfterCombat(function() Core:OpenSettings() end, "core.settings")
+    return
+  end
   if self.settingsCategory and Settings and Settings.OpenToCategory then
-    Settings.OpenToCategory(self.settingsCategory:GetID())
+    pcall(Settings.OpenToCategory, self.settingsCategory:GetID())
   end
 end
 

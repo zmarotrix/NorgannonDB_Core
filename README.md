@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/WoW%20Forever-1.60.1-e7c66c?style=flat-square" alt="WoW Forever 1.60.1">
-  <img src="https://img.shields.io/badge/API-1.19-e7c66c?style=flat-square" alt="API 1.19">
+  <img src="https://img.shields.io/badge/API-1.21-e7c66c?style=flat-square" alt="API 1.21">
   <img src="https://img.shields.io/badge/status-early%20development-b0913f?style=flat-square" alt="Status: early development">
 </p>
 
@@ -16,7 +16,7 @@
 
 # NorgannonDB Core
 
-**The engine under the NorgannonDB suite.** Core is what makes Clairvoyance and Oracle feel like
+**The engine under the NorgannonDB suite.** Core is what makes the suite's add-ons feel like
 one family: the same look, the same map markers, the same colours for your quests, one settings
 page, and the work done once instead of once per add-on.
 
@@ -33,13 +33,18 @@ of the rest.
 | <img src=".github/suite/collector.png" width="36"> | **[NorgannonDB Collector](https://github.com/zmarotrix/NorgannonDBCollector)** | Help map Azeroth: improves the database while you play |
 | <img src=".github/suite/retrospect.png" width="36"> | **[Retrospect](https://github.com/zmarotrix/Retrospect)** | Your characters, account-wide: what each one has, knows and has waiting |
 | <img src=".github/suite/dimension.png" width="36"> | **[Dimension](https://github.com/zmarotrix/Dimension)** | Your bags, looked after: sells what's safe, frees space, runs bank trips, and says why |
+| <img src=".github/suite/council.png" width="36"> | **[Council](https://github.com/zmarotrix/Council)** | Your guild's loot and records: reserves, rolls, master loot and who got what |
+| <img src=".github/suite/muster.png" width="36"> | **[Muster](https://github.com/zmarotrix/Muster)** | Guild recruitment, without the spam |
+| <img src=".github/suite/mercy.png" width="36"> | **[Mercy](https://github.com/zmarotrix/Mercy)** | Healer frames: click to heal, with the debuffs you can remove lit up |
+| <img src=".github/suite/bulwark.png" width="36"> | **Bulwark** | Combat and aggro on enemy nameplates |
 | <img src=".github/suite/archivum.png" width="36"> | Archivum | Look anything up in game. *Coming later* |
 
 ## Getting started
 
 Download it (**Code → Download ZIP**), extract it into your WoW Forever `Interface/AddOns` folder,
-and rename the folder from `NorgannonDB_Core-main` to `NorgannonDB_Core`. It needs
-**[NorgannonDB](https://github.com/zmarotrix/NorgannonDB)** too.
+and rename the folder from `NorgannonDB_Core-main` to `NorgannonDB_Core`. Add-ons that show quests, dungeons or items
+(Clairvoyance, Oracle, Retrospect, Dimension, Council) also need
+**[NorgannonDB](https://github.com/zmarotrix/NorgannonDB)**; Muster, Mercy and Bulwark run on the Core alone.
 
 | Command | What it does |
 |---|---|
@@ -65,7 +70,7 @@ and rename the folder from `NorgannonDB_Core-main` to `NorgannonDB_Core`. It nee
 - shared quest colours
 - minimap buttons, and the suite's Settings page
 
-Its API is versioned (`Core:Require(major, minor)`, currently 1.19). Add-ons that don't read the game data run on Core without NorgannonDB.
+Its API is versioned (`Core:Require(major, minor)`, currently 1.21). Add-ons that don't read the game data run on Core without NorgannonDB.
 
 </details>
 

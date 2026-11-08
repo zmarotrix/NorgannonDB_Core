@@ -49,7 +49,7 @@ local function build()
   f.about:SetWidth(WIDTH - 28)
   f.about:SetWordWrap(true)
   f.about:SetText("One open database of the quests, NPCs, objects, items, drops and spawns in WoW Forever. "
-    .. "Every suite addon reads from it, and any other addon is welcome to. It is free and open source, "
+    .. "Every suite add-on reads from it, and any other add-on is welcome to. It is free and open source, "
     .. "and it grows from what players see in the game.")
 
   f.rule = UI.Rule(f)

@@ -118,7 +118,8 @@ function Core:NewAddon(key, opts)
   local A = type(rawget(_G, global)) == "table" and rawget(_G, global) or {}
   _G[global] = A
   A.key, A.name, A.addonName, A.info = key, name, folder, info
-  A.PREFIX = "|cff" .. info.accent .. name .. "|r"
+  -- the accent as text: lightened where it is too dark to read (Bulwark's blue), here and in the tooltip
+  A.PREFIX = UI.Code(UI.AccentText(key)) .. name .. "|r"
   A.ACCENT = UI.Hex(info.accent)
 
   function A:Print(msg) Core:Print(msg, self.PREFIX) end
@@ -242,7 +243,7 @@ function Core:NewAddon(key, opts)
       A:OpenSettings()
     end
     local function tooltip(tt)
-      local c = A.ACCENT
+      local c = UI.AccentText(key)
       tt:AddLine(name, c[1], c[2], c[3])
       if info.role and info.role ~= "" then tt:AddLine(info.role, 1, 1, 1) end
       if mm.status then
