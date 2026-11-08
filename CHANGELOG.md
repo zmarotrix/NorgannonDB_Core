@@ -2,6 +2,18 @@
 
 Earlier versions are in the git history.
 
+## 1.21.2 (2026-11-07)
+
+- NorgannonDB's Settings page is now the suite's hub, made for many add-ons:
+  - The header says it's the core of the suite, with the Core's version and, on one line, NorgannonDB's data (or
+    that the data isn't loaded, so add-ons that need it are off).
+  - Your add-ons are tiles, two to a row: mark, name, what it does, version. "Running" is no longer said nine times;
+    a tile only says something when an add-on isn't running ("Installed, not loaded", or "Turned off" and why).
+  - Clicking a tile opens that add-on, as its row in the minimap list does; hovering shows its tooltip.
+  - The tiles scroll when there are more than fit. The credits are a short footer.
+- `Core:AddonState` can say `"off"`: the add-on loaded but turned itself off (`Core:NewAddon` found the Core or the
+  data too old), with the reason from `Core:AddonProblem(key)`.
+
 ## 1.21.1 (2026-11-07)
 
 - An add-on's name in its chat lines, its tooltip and the minimap flyout uses `UI.AccentText`, so a dark accent

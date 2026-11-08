@@ -136,6 +136,8 @@ function Core:NewAddon(key, opts)
   end
   if why then
     A.disabled = true
+    -- listed as turned off, with the reason, on NorgannonDB's settings page
+    Core:RegisterAddon(key, { version = metadata(folder, "Version"), problem = why })
     Core:OnLogin(function()
       if C_Timer and C_Timer.After then C_Timer.After(3, function() A:Print(why) end) else A:Print(why) end
     end)

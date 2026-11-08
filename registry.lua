@@ -48,10 +48,11 @@ function Core:RegisterAddon(key, info)
   self:Send("NORGANNON_ADDON_REGISTERED", key)
 end
 
----"loaded" when the addon is running, "installed" when it is present but not loaded (disabled
----or load on demand), otherwise "missing".
+---"loaded" when the addon is running, "off" when it loaded but turned itself off (Core:AddonProblem says why),
+---"installed" when it is present but not loaded (disabled or load on demand), otherwise "missing".
 function Core:AddonState(key)
-  if registered[key] then return "loaded" end
+  local reg = registered[key]
+  if reg then return reg.problem and "off" or "loaded" end
   local info = byKey[key]
   if not info or not C_AddOns then return "missing" end
   local ok, loaded = pcall(C_AddOns.IsAddOnLoaded, info.folder)
@@ -59,6 +60,11 @@ function Core:AddonState(key)
   local okInfo, name, _, _, _, reason = pcall(C_AddOns.GetAddOnInfo, info.folder)
   if okInfo and name and reason ~= "MISSING" then return "installed" end
   return "missing"
+end
+
+---Why an add-on that loaded turned itself off ("needs NorgannonDB Core 1.22 or newer"), or nil.
+function Core:AddonProblem(key)
+  return registered[key] and registered[key].problem
 end
 
 function Core:AddonVersion(key)
