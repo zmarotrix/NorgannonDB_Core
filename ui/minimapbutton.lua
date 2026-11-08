@@ -376,7 +376,7 @@ function MB:LayoutFlyout()
     f.rows[i] = row
     row.key = key
     local info = Core:GetAddonInfo(key)
-    row.mark:SetTexture(UI.MEDIA .. "marks\\" .. key)
+    row.mark:SetTexture(UI.MarkPath(key))
     local accent = UI.Accent(key)
     row.name:SetText(info and info.name or key)
     row.name:SetTextColor(accent[1], accent[2], accent[3], 1)

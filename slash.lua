@@ -23,6 +23,10 @@ local function openSettings() Core:OpenSettings() end
 local function showGallery() Core:ShowGallery() end
 
 local function demo(rest)
+  if not Core:HasData() then
+    Core:Print("the demo draws your quests from NorgannonDB, which isn't loaded")
+    return
+  end
   if rest == "off" then
     Core:Demo(false)
     Core:Print("demo pins cleared")
@@ -87,6 +91,10 @@ end
 
 local function version()
   local info = NorgannonDB and NorgannonDB.info
+  if not Core:HasData() then
+    Core:Print(string.format("Core %s, without NorgannonDB's data", Core:Version()))
+    return
+  end
   Core:Print(string.format("Core %s, data %s (%s)", Core:Version(), info and info.generated or "?", info and info.build or "?"))
 end
 

@@ -27,6 +27,67 @@ function Core.Safe(v, fallback)
 end
 
 -------------------------------------------------------------------------------------------
+-- Calling the client (1.19). The API docs list calls for every game flavour, so any of them may
+-- be missing on Forever, refuse (error), or answer in secret values. These are the suite's one
+-- way to call it; add-ons used to carry their own copies.
+-------------------------------------------------------------------------------------------
+
+---The client function ns.name, or the global name when ns is nil; nil if the client lacks it.
+function Core.Fn(ns, name)
+  local fn
+  if ns == nil then
+    fn = rawget(_G, name)
+  else
+    local t = rawget(_G, ns)
+    fn = type(t) == "table" and t[name] or nil
+  end
+  return type(fn) == "function" and fn or nil
+end
+
+---true if the client has ns.name (or the global name when ns is nil).
+function Core.Has(ns, name) return Core.Fn(ns, name) ~= nil end
+
+---fn(...) through pcall: ok, ... with the answer exactly as it came, secrets included. For handing values to
+---widgets that accept secrets. ok is false when fn is missing or errored.
+function Core.Call(fn, ...)
+  if type(fn) ~= "function" then return false end
+  return pcall(fn, ...)
+end
+
+local function plain(ok, ...)
+  if not ok then return nil end
+  local n = select("#", ...)
+  if n == 0 then return nil end
+  local out = { ... }
+  for i = 1, n do
+    if Core.IsSecret(out[i]) then out[i] = nil end
+  end
+  return unpack(out, 1, n)
+end
+
+---fn(...) with every secret value turned into nil, and nil when fn is missing or errored: for logic that branches.
+function Core.Plain(fn, ...)
+  if type(fn) ~= "function" then return nil end
+  return plain(pcall(fn, ...))
+end
+
+---The global client function name(...), through Core.Plain.
+function Core.Global(name, ...) return Core.Plain(Core.Fn(nil, name), ...) end
+
+---The namespaced client function ns.name(...), through Core.Plain: Core.In("C_Bank", "CanViewBank").
+function Core.In(ns, name, ...) return Core.Plain(Core.Fn(ns, name), ...) end
+
+---obj:method(...) where the arguments may be secret (a widget that accepts them): false if the client refused.
+function Core.SetSecret(obj, method, ...)
+  local fn = obj and obj[method]
+  if type(fn) ~= "function" then return false end
+  return (pcall(fn, obj, ...))
+end
+
+---The server's time (seconds), else the computer's.
+function Core.Now() return Core.Global("GetServerTime") or time() end
+
+-------------------------------------------------------------------------------------------
 -- Combat lockdown: protected work waits for the end of combat
 -------------------------------------------------------------------------------------------
 

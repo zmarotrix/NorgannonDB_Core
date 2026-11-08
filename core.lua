@@ -10,15 +10,46 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 18,
+  VERSION_MINOR = 19,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
+  -- Older majors this Core still serves, through shims, with the last minor of each: the promise is that a new
+  -- major keeps the previous one working for one release (docs/dev/compatibility.md). Empty while we're on 1.x.
+  COMPAT = {},
 }
 NorgannonCore = Core
 
----true if this Core serves a consumer written for API major.minor.
+---true if this Core serves a consumer written for API major.minor: the same major at that minor or later, or a
+---previous major still kept working through Core.COMPAT.
 function Core:Require(major, minor)
-  return major == self.VERSION_MAJOR and (minor or 0) <= self.VERSION_MINOR
+  minor = minor or 0
+  if major == self.VERSION_MAJOR then return minor <= self.VERSION_MINOR end
+  local lastMinor = self.COMPAT[major]
+  return lastMinor ~= nil and minor <= lastMinor
+end
+
+---true when an add-on written for major.minor runs only through a compatibility shim: it works, but should move on.
+function Core:IsDeprecated(major)
+  return major ~= self.VERSION_MAJOR and self.COMPAT[major] ~= nil
+end
+
+---Why an add-on written for major.minor can't run here, in a player's words; nil if it can.
+function Core:RequireMessage(name, major, minor)
+  if self:Require(major, minor) then return nil end
+  local wanted = major .. "." .. (minor or 0)
+  if major > self.VERSION_MAJOR or (major == self.VERSION_MAJOR and (minor or 0) > self.VERSION_MINOR) then
+    return string.format("%s needs NorgannonDB Core %s or newer (this is %s): update NorgannonDB Core. %s is turned off.",
+      name, wanted, self:Version(), name)
+  end
+  return string.format("%s was made for NorgannonDB Core %s, which this Core (%s) no longer serves: update %s. It is turned off.",
+    name, wanted, self:Version(), name)
+end
+
+---Whether NorgannonDB, the game data, is loaded. Core runs without it (1.19): Core.DB answers nil and empty lists,
+---and the map, quest and search features have nothing to show. Add-ons that need the data list it in their TOC.
+function Core:HasData()
+  local DB = rawget(_G, "NorgannonDB")
+  return type(DB) == "table" and DB.Get ~= nil
 end
 
 function Core:Version()

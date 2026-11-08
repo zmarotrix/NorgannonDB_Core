@@ -2,6 +2,23 @@
 
 Earlier versions are in the git history.
 
+## 1.19.0 (2026-11-07)
+
+- Core no longer needs NorgannonDB. Add-ons that don't read the game data (Muster, Mercy, Bulwark) now
+  run with Core alone, without the 163 MB database. With NorgannonDB missing, Core's data calls
+  answer nothing, and `/norg demo` and `/norg version` say so.
+- API 1.19, for building add-ons (see docs/dev/getting-started.md in the suite workspace):
+  - `Core:NewAddon(key, opts)`: the version check, saved variables with defaults and migrations,
+    registration, the minimap flyout row, the game's add-on menu, the slash command and the settings
+    page, in one call. Settings asked for in combat open when the fight ends.
+  - `Core:SavedVars(name, opts)`: saved variables with a version (`_v`), migrations that run once,
+    and deep defaults.
+  - `Core.Fn`, `Core.Has`, `Core.Call`, `Core.Plain`, `Core.Global`, `Core.In`, `Core.SetSecret`,
+    `Core.Now`: one safe way to call the client.
+  - `Core:HasData()`, `Core:DefineAddon(info)` for add-ons outside the suite, `UI.MarkPath(key)`.
+  - `Core:Require` now keeps its promise across major versions: a previous major listed in
+    `Core.COMPAT` is still served. `Core:IsDeprecated` and `Core:RequireMessage` go with it.
+
 ## 1.18.0 (2026-11-07)
 
 - One Norgannon button on the minimap in place of one button per suite add-on. Click it for a

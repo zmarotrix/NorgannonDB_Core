@@ -30,6 +30,15 @@ function Core:GetAddonInfo(key)
   return byKey[key]
 end
 
+---Makes an add-on outside the suite list known (1.19; Core:NewAddon calls it): { key, name, folder, accent = "rrggbb",
+---role, slash, mark = texture path }. The minimap flyout, UI.Accent and UI.Mark then know it. A key already known keeps
+---its entry: the suite's own add-ons can't be redefined.
+function Core:DefineAddon(info)
+  if byKey[info.key] then return byKey[info.key] end
+  byKey[info.key] = info
+  return info
+end
+
 -- Addons register themselves at load with their version and anything they want to expose.
 local registered = {}
 

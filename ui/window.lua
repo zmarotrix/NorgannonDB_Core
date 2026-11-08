@@ -166,7 +166,7 @@ function UI.Window(opts)
     local c = self.accent
     self.title:SetTextColor(c[1], c[2], c[3])
     gradient(self.glow, c, c, .1, 0)
-    self.mark:SetTexture(UI.MEDIA .. "marks\\" .. (key or "norgannondb"))
+    self.mark:SetTexture(UI.MarkPath(key))
     for _, widget in ipairs(self._accentWidgets) do widget:ApplyAccent(c) end
   end
   function f:SetSub(text) self.sub:SetText(text or "") end

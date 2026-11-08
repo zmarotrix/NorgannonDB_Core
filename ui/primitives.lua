@@ -160,10 +160,19 @@ function UI.Icon(parent, name, size, c, layer)
   return t
 end
 
+---The texture of an add-on's mark: its own (an add-on outside the suite passes `mark` to Core:NewAddon), else the
+---Core's marks\<key>.
+function UI.MarkPath(key)
+  local info = key and Core:GetAddonInfo(key)
+  if info and info.mark then return info.mark end
+  -- the Core has a mark for each add-on in its registry; anything else shows NorgannonDB's
+  return UI.MEDIA .. "marks\\" .. ((info and not info.external) and key or "norgannondb")
+end
+
 ---A suite addon's mark (gold disc with its symbol).
 function UI.Mark(parent, key, size, layer)
   local t = parent:CreateTexture(nil, layer or "ARTWORK")
-  t:SetTexture(UI.MEDIA .. "marks\\" .. key)
+  t:SetTexture(UI.MarkPath(key))
   t:SetSize(size, size)
   return t
 end
