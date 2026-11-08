@@ -655,6 +655,35 @@ function Map:MemoryStats()
   return out
 end
 
+-- /norg minimap: three test pins on you, 50 yards north and 100 yards east, then what the minimap
+-- pass made of them. Tells "no pin near you" apart from a minimap that can't draw.
+local TEST_OWNER, TEST_SECONDS = "norg.minimaptest", 60
+
+function Map:MinimapTest()
+  local zx, zy, uiMap = HBD:GetPlayerZonePosition()
+  local area = uiMap and Map.UiMapToArea(uiMap)
+  if not zx or Core.IsSecret(zx) or not area then
+    return string.format("no position to test from (zone map %s, NorgannonDB area %s)", tostring(uiMap), tostring(area))
+  end
+  local width, height = HBD:GetZoneSize(uiMap)
+  if not width or width == 0 then return "this zone has no size in HereBeDragons' data" end
+  local function pin(title, east, north, color)
+    return { area = area, x = (zx + east / width) * 100, y = (zy - north / height) * 100, title = title, color = color, layer = 9 }
+  end
+  self:SetPins(TEST_OWNER, {
+    pin("Test: you", 0, 0, { 1, .2, .2 }),
+    pin("Test: 50 yd north", 0, 50, { .2, 1, .2 }),
+    pin("Test: 100 yd east", 100, 0, { .3, .5, 1 }),
+  })
+  self:RefreshMinimap()
+  local s = self.stats
+  C_Timer.After(TEST_SECONDS, function() Map:ClearPins(TEST_OWNER) end)
+  return string.format("3 test pins (red on you, green 50 yd north, blue 100 yd east) for %d s: %s, %d inside, %d drawn, nearest %s; view radius %s yd; zone %s is %.0f x %.0f yd",
+    TEST_SECONDS, tostring(s.minimapState), s.minimapInside or 0, s.minimap or 0,
+    s.minimapNearest and string.format("%.0f yd", s.minimapNearest) or "none",
+    s.minimapRadius and string.format("%.0f", s.minimapRadius) or "?", tostring(uiMap), width, height)
+end
+
 ---Draws everything now (normally the driver does it within THROTTLE seconds).
 function Map:Refresh()
   self:RefreshWorld()

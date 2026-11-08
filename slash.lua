@@ -12,6 +12,7 @@ local HELP = {
   "/norg icons - the town service and gathering icons, and which source the client has",
   "/norg perf [seconds | stop | report] - measure the suite against its performance budgets (default 60 s)",
   "/norg mem [rate [seconds]] - memory per suite add-on and the Core's tables; rate: how fast each makes garbage",
+  "/norg minimap - put three test pins around you and say what the minimap made of them",
   "/norg mappins - list what is drawn on the open world map (who draws which markers)",
   "/norg version",
 }
@@ -88,6 +89,8 @@ local function mem(rest)
   end
 end
 
+local function minimapTest() Core:Print(Core.Map:MinimapTest()) end
+
 local function icons()
   local keys = {}
   for key in pairs(Core.Map.SERVICE_ICONS) do keys[#keys + 1] = key end
@@ -133,6 +136,7 @@ local COMMANDS = {
   mappins = mapPins,
   perf = perf,
   mem = mem,
+  minimap = minimapTest,
   icons = icons,
   version = version,
   debug = debugLog,

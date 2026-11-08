@@ -2,6 +2,13 @@
 
 Earlier versions are in the git history.
 
+## 1.22.5 (2026-11-07)
+
+- `/norg minimap` puts three test pins around you (red on you, green 50 yards north, blue 100 yards east) for a
+  minute and says what the minimap pass made of them: how many were inside and drawn, the nearest, the view radius,
+  and the zone's size. In game the minimap had drawn no pins; this tells "no objective near you" (Clairvoyance
+  keeps "!" and "?" off the minimap, so only objective pins go there) apart from a minimap that can't draw.
+
 ## 1.22.4 (2026-11-07)
 
 - Council and Muster are the suite's add-ons for guilds: `Core.SUITE` lists them last with `group = "guild"`.
