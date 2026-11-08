@@ -2,6 +2,14 @@
 
 Earlier versions are in the git history.
 
+## 1.26.0 (2026-11-07)
+
+- `Core.Compat` covers 17 more classic functions, generated from ForeverAPI's table of what Forever dropped:
+  quest log (`IsQuestFlaggedCompleted`, `GetQuestLogIndexByID`, `GetNumQuestLogEntries`, `AbandonQuest`, ...),
+  reputation headers, gossip counts, `GetContainerItemID`, `IsEquippedItem`, `LoadAddOn`, `GetZonePVPInfo` and more:
+  58 in all. Only calls that take the same arguments and give the same answers are generated; ones whose answer
+  changed (`SendAddonMessage` now returns a result code) are left out. `tools/compat_gen.py` regenerates the list.
+
 ## 1.25.0 (2026-11-07)
 
 - `Core:Say(text, kind)`: a chat line from an add-on that reaches chat, or, where the game doesn't let it through

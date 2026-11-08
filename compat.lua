@@ -1,4 +1,4 @@
--- Core.Compat (1.23): the classic functions WoW Forever's client no longer has, with their classic answers.
+-- Core.Compat (1.23; the generated list 1.26): the classic functions WoW Forever's client no longer has, with their classic answers.
 --
 -- Forever runs Classic content on the modern client, and many classic globals are gone there: GetSpellInfo,
 -- GetItemInfo, GetContainerItemInfo and the rest moved into C_Spell, C_Item, C_Container, C_SpellBook and C_AddOns,
@@ -81,6 +81,15 @@ for _, name in ipairs({ "GetSpellTexture", "GetSpellLink", "GetSpellDescription"
   "GetContainerNumSlots", "GetContainerNumFreeSlots", "GetContainerItemLink", "PickupContainerItem", "UseContainerItem",
   "GetNumSpellTabs", "GetAddOnMetadata", "IsAddOnLoaded", "GetNumAddOns", "GetAddOnInfo", "EnableAddOn", "DisableAddOn" }) do
   Compat[name] = same(name)
+end
+
+-- and the generated ones (compat_list.lua, made by tools/compat_gen.py from ForeverAPI's relocated-API table): gone
+-- on Forever, replaced by a function called the same way with the same answers
+for name, target in pairs(Core.CompatSame or {}) do
+  if not Compat.MAP[name] then
+    Compat.MAP[name] = target
+    Compat[name] = same(name)
+  end
 end
 
 -------------------------------------------------------------------------------------------
