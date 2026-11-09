@@ -2,6 +2,11 @@
 
 Earlier versions are in the git history.
 
+## 1.28.0 (2026-11-09)
+
+- `Core.Net` and `Core:Say` / `Core:OpenChat` are LibForever-1.0's too (phase 2 of the toolkit), the same table and
+  functions. `Core:Say` still remembers which chats reach in `NorgannonCoreDB.say`; `Core:ResetSay` stays in Core.
+
 ## 1.27.0 (2026-11-09)
 
 - The Forever toolkit is now its own library, LibForever-1.0, which other add-on developers can use too. It lives in

@@ -1,9 +1,12 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-  <!-- LibForever-1.0. Needs LibStub loaded first. SavedVars.lua must stay last. -->
+  <!-- LibForever-1.0. Needs LibStub, CallbackHandler-1.0 and AceComm-3.0 (with ChatThrottleLib) loaded first.
+       SavedVars.lua must stay last. -->
   <Script file="Base.lua"/>
   <Script file="CompatList.lua"/>
   <Script file="Compat.lua"/>
   <Script file="Secret.lua"/>
   <Script file="Names.lua"/>
+  <Script file="Net.lua"/>
+  <Script file="Say.lua"/>
   <Script file="SavedVars.lua"/>
 </Ui>
