@@ -6,6 +6,7 @@ Earlier versions are in the git history.
 
 - `Core.Net` and `Core:Say` / `Core:OpenChat` are LibForever-1.0's too (phase 2 of the toolkit), the same table and
   functions. `Core:Say` still remembers which chats reach in `NorgannonCoreDB.say`; `Core:ResetSay` stays in Core.
+- Map pins can take `ring = {r, g, b}`, a border colour around the dot (`Map.RINGS`).
 
 ## 1.27.0 (2026-11-09)
 
