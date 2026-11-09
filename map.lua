@@ -14,12 +14,15 @@
 -- Pins of a quest set `quest = questId`: they take the quest's colour from Core.Colors (unless
 -- they give `color`), hovering one dims every other quest's pins, and without an onClick a
 -- left-click rolls a new colour and a right-click opens the colour picker.
+--
+-- `ring = {r, g, b}` puts a coloured border around a pin (a larger disc behind it), so pins of
+-- one colour can still tell apart, e.g. a quest's objectives (Map.RINGS says this Core has it).
 
 local Core = NorgannonCore
 local UI = Core.UI
 local HBD = LibStub("HereBeDragons-NorgannonCore-2.0")
 
-local Map = { owners = {}, stats = { world = 0, minimap = 0, clusters = 0 } }
+local Map = { owners = {}, stats = { world = 0, minimap = 0, clusters = 0 }, RINGS = true }
 Core.Map = Map
 
 local WORLD_LEVEL = 2015          -- Blizzard's map pins start around 2000; stay above them
@@ -31,6 +34,7 @@ local DEFAULT_PIN_SIZE = 7
 local HOVER_GROW = 1.25           -- a hovered pin's size
 local OVERLAP_REACH = .9          -- of a pin's size: closer than this, two pins with one overlapKey "stack"
 local CONTINENT_DOT, CONTINENT_ICON = 9, 14   -- marker sizes on continent maps: a plain pin, anything else
+local function ringSize(size) return size + math.max(4, math.floor(size * .5)) end   -- about 2 px of border each side
 
 local Icons = Core.MapIcons
 local setIcon = Icons.Set
@@ -154,6 +158,7 @@ local function pinEnter(self)
   local pin = self.pin
   if not pin then return end
   self.icon:SetSize(self.size * HOVER_GROW, self.size * HOVER_GROW)
+  if self.ring then local r = ringSize(self.size * HOVER_GROW) self.ring:SetSize(r, r) end
   Map:SetHighlight(highlightKey(pin))
   GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
   if pin.tooltip then
@@ -173,6 +178,7 @@ end
 
 local function pinLeave(self)
   self.icon:SetSize(self.size, self.size)
+  if self.ring then local r = ringSize(self.size) self.ring:SetSize(r, r) end
   Map:SetHighlight(nil)
   GameTooltip:Hide()
 end
@@ -214,6 +220,20 @@ local function dress(f, pin, size, alpha)
   f.size = size
   f:SetSize(size, size)
   f.icon:SetSize(size, size)
+  local ring = pin.ring
+  if ring then
+    if not f.ring then
+      f.ring = f:CreateTexture(nil, "BORDER")
+      f.ring:SetPoint("CENTER")
+      f.ring:SetTexture(UI.TEX.pin)
+    end
+    local r = ringSize(size)
+    f.ring:SetSize(r, r)
+    f.ring:SetVertexColor(ring[1], ring[2], ring[3])
+    f.ring:Show()
+  elseif f.ring then
+    f.ring:Hide()
+  end
   f.baseAlpha = alpha or 1
   f:SetAlpha(highlightedAlpha(f.baseAlpha, pin))
   f.pin = pin
