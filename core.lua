@@ -10,7 +10,7 @@ local ADDON = ...
 
 local Core = {
   VERSION_MAJOR = 1,
-  VERSION_MINOR = 26,
+  VERSION_MINOR = 27,
   addonName = ADDON or "NorgannonDB_Core",
   db = nil,                 -- NorgannonCoreDB, set at ADDON_LOADED
   -- Older majors this Core still serves, with the last minor of each. Empty: the promise is the same major version
@@ -57,103 +57,18 @@ function Core:Version()
 end
 
 -------------------------------------------------------------------------------------------
--- Calling other addons' code: an error in one listener must not stop the others
+-- Events, messages and the rest of the base (1.27): LibForever-1.0, the public Forever toolkit, owns them. It lives in
+-- ForeverAPI (lib/LibForever-1.0); tools/deploy.py copies it into libs/. Core's names point at it, so nothing that
+-- calls Core changes. Its functions ignore self, which is why Core.On = LF.On works as Core:On.
 -------------------------------------------------------------------------------------------
 
--- securecallfunction hands an error to the error handler and carries on, so a broken listener
--- can't take the rest down with it (nor taint the caller). The plain call is for a client without it.
-local function call(fn, ...)
-  if securecallfunction then return securecallfunction(fn, ...) end
-  return fn(...)
-end
-Core.SafeCall = call
+local LF = LibStub("LibForever-1.0")
+Core.LibForever = LF
 
--------------------------------------------------------------------------------------------
--- Game events: one frame for the whole suite
--------------------------------------------------------------------------------------------
-
-local eventFrame = CreateFrame("Frame")
-local handlers = {}   -- event -> { owner -> fn }
-
-local function validEvent(event)
-  if C_EventUtils and C_EventUtils.IsEventValid then return C_EventUtils.IsEventValid(event) end
-  return true
-end
-
--- Adds or replaces an owner's function in registry[key], which must exist. A new owner goes into
--- a copy of the list: a dispatch may be looping over it right now (a listener can register
--- another), and adding a key to a table during pairs is undefined in Lua. The new owner hears
--- from the next dispatch on.
-local function setOwner(registry, key, owner, fn)
-  local list = registry[key]
-  if list[owner] ~= nil then
-    list[owner] = fn
-    return
-  end
-  local copy = {}
-  for existing, existingFn in pairs(list) do copy[existing] = existingFn end
-  copy[owner] = fn
-  registry[key] = copy
-end
-
----Calls fn(event, ...) for a game event. owner keys the handler (one per owner and event).
----Returns false for events this client does not have.
-function Core:On(event, owner, fn)
-  if not validEvent(event) then return false end
-  if not handlers[event] then
-    -- RegisterEvent throws on an event the client doesn't have
-    if not pcall(eventFrame.RegisterEvent, eventFrame, event) then return false end
-    handlers[event] = {}
-  end
-  setOwner(handlers, event, owner, fn)
-  return true
-end
-
-function Core:Off(event, owner)
-  local list = handlers[event]
-  if not list then return end
-  list[owner] = nil
-  if next(list) == nil then
-    handlers[event] = nil
-    eventFrame:UnregisterEvent(event)
-  end
-end
-
--- eventTap(event, starting) brackets each dispatch while /norg mem rate measures; nil otherwise
-local eventTap = nil
-
-eventFrame:SetScript("OnEvent", function(_, event, ...)
-  local list = handlers[event]
-  if not list then return end
-  local tap = eventTap
-  if tap then tap(event, true) end
-  for _, fn in pairs(list) do call(fn, event, ...) end
-  if tap then tap(event, false) end
-end)
-
----For measuring (/norg mem rate): fn(event, starting) around every game event the Core dispatches; nil stops.
-function Core:SetEventTap(fn) eventTap = fn end
-
--------------------------------------------------------------------------------------------
--- Messages between suite addons (and inside the Core)
--------------------------------------------------------------------------------------------
-
-local listeners = {}  -- message -> { owner -> fn }
-
-function Core:Listen(message, owner, fn)
-  listeners[message] = listeners[message] or {}
-  setOwner(listeners, message, owner, fn)
-end
-
-function Core:Unlisten(message, owner)
-  if listeners[message] then listeners[message][owner] = nil end
-end
-
-function Core:Send(message, ...)
-  local list = listeners[message]
-  if not list then return end
-  for _, fn in pairs(list) do call(fn, message, ...) end
-end
+Core.SafeCall = LF.SafeCall
+Core.On, Core.Off, Core.SetEventTap = LF.On, LF.Off, LF.SetEventTap
+Core.Listen, Core.Unlisten, Core.Send = LF.Listen, LF.Unlisten, LF.Send
+local call = LF.SafeCall
 
 -------------------------------------------------------------------------------------------
 -- Load order: run code once saved variables are in (ADDON_LOADED) or the world is up
@@ -202,9 +117,7 @@ end)
 Core.PREFIX = "|cffe7c66cNorgannonDB|r"
 
 function Core:Print(msg, prefix)
-  if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage((prefix or self.PREFIX) .. ": " .. tostring(msg))
-  end
+  LF:Print(msg, prefix or self.PREFIX)
 end
 
 local LOG_SIZE = 300
@@ -219,3 +132,8 @@ function Core:Debug(source, fmt, ...)
   table.insert(log, string.format("%s %s: %s", clock, tostring(source), ok and text or fmt))
   while #log > LOG_SIZE do table.remove(log, 1) end
 end
+
+-- LibForever's own lines (a failed saved-variable migration, say) go to the same log. Core's lines don't pass
+-- through the library's sink, so another add-on setting its own sink can't take them away.
+LF:SetDebugSink(function(source, text) Core:Debug(source, "%s", text) end,
+  function() return Core.db ~= nil and not not Core.db.debug end)

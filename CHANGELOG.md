@@ -2,6 +2,17 @@
 
 Earlier versions are in the git history.
 
+## 1.27.0 (2026-11-09)
+
+- The Forever toolkit is now its own library, LibForever-1.0, which other add-on developers can use too. It lives in
+  ForeverAPI and ships in `libs/LibForever-1.0`. Events and messages, `AfterCombat`, `NextFrame`, `Restricted`, the
+  client and secret-value helpers (`Fn`, `Call`, `Plain`, `Global`, `In`, `SetSecret`, `IsSecret`, `Safe`, `Now`,
+  `Client`), `Core.Compat`, `Core.Secret`, `Core.Names` and `Core:SavedVars` are the library's, under the same names.
+  Nothing an add-on calls changed. `UI.UnitBar`, `Core:Debug`'s log and `Core:Print`'s prefix stay in Core.
+- `NORGANNON_RESTRICTIONS_CHANGED` still fires; it now follows the library's `LIBFOREVER_RESTRICTIONS_CHANGED`.
+- `compat_list.lua` is gone: the generated Compat list is the library's `CompatList.lua`, made by ForeverAPI's
+  `tools/compat_gen.py`.
+
 ## 1.26.2 (2026-11-08)
 
 - The minimap flyout's second line is always grey; only the add-on's name carries its colour.

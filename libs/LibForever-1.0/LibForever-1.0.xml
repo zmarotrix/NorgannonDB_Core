@@ -1,0 +1,9 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <!-- LibForever-1.0. Needs LibStub loaded first. SavedVars.lua must stay last. -->
+  <Script file="Base.lua"/>
+  <Script file="CompatList.lua"/>
+  <Script file="Compat.lua"/>
+  <Script file="Secret.lua"/>
+  <Script file="Names.lua"/>
+  <Script file="SavedVars.lua"/>
+</Ui>

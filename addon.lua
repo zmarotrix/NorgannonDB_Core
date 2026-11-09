@@ -20,49 +20,15 @@ local UI = Core.UI
 -- Saved variables: defaults, a version and migrations
 -------------------------------------------------------------------------------------------
 
-local function fill(target, defaults)
-  for k, v in pairs(defaults) do
-    if target[k] == nil then
-      if type(v) == "table" then
-        target[k] = {}
-        fill(target[k], v)
-      else
-        target[k] = v
-      end
-    elseif type(v) == "table" and type(target[k]) == "table" then
-      fill(target[k], v)
-    end
-  end
-  return target
-end
-Core.FillDefaults = fill
-
----Loads the saved variable `name` (call it at or after its add-on's ADDON_LOADED): runs each migration it hasn't had,
----fills in missing defaults (deep; a player's own values always stay) and stores the version in `_v`.
----opts = { defaults = {}, version = 1, migrate = { [2] = function(sv) ... end } }. Saves from before versioning count as
----version 1; a brand-new save starts at `version` and runs no migration. Returns the table, which is also _G[name].
-function Core:SavedVars(name, opts)
-  opts = opts or {}
-  local saved = rawget(_G, name)
-  local fresh = type(saved) ~= "table" or next(saved) == nil
-  local sv = type(saved) == "table" and saved or {}
-  local version = opts.version or 1
-  local from = tonumber(sv._v) or (fresh and version or 1)
-  if from > version then
-    Core:Debug(name, "saved at version %d, newer than this add-on's %d: left as it is", from, version)
-  end
-  for v = from + 1, version do
-    local step = opts.migrate and opts.migrate[v]
-    if step then
-      local ok, err = pcall(step, sv)
-      if not ok then Core:Debug(name, "migration to %d failed: %s", v, tostring(err)) end
-    end
-  end
-  if (tonumber(sv._v) or 0) < version then sv._v = version end
-  fill(sv, opts.defaults or {})
-  _G[name] = sv
-  return sv
-end
+-- Since 1.27 these are LibForever-1.0's (SavedVars.lua in ForeverAPI's lib/).
+--
+---Core:SavedVars(name, opts): loads the saved variable `name` (call it at or after its add-on's ADDON_LOADED): runs
+---each migration it hasn't had, fills in missing defaults (deep; a player's own values always stay) and stores the
+---version in `_v`. opts = { defaults = {}, version = 1, migrate = { [2] = function(sv) ... end } }. Saves from before
+---versioning count as version 1; a brand-new save starts at `version` and runs no migration. Returns the table, which
+---is also _G[name].
+Core.SavedVars = Core.LibForever.SavedVars
+Core.FillDefaults = Core.LibForever.FillDefaults
 
 -------------------------------------------------------------------------------------------
 -- The add-on object

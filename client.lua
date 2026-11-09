@@ -1,159 +1,31 @@
--- Client layer: which client this is, secret-value safety, the combat lockdown queue and
--- next-frame scheduling.
--- WoW Forever runs Classic content on the modern client (interface 16000-16999). Some values
--- are "secret" in combat and instances: they may be passed along but never compared or used
--- in a branch, so everything that reads unit or quest data goes through these helpers.
+-- Client layer: which client this is, secret-value safety, the combat lockdown queue and next-frame scheduling.
+-- WoW Forever runs Classic content on the modern client (interface 16000-16999). Some values are "secret" in combat
+-- and instances: they may be passed along but never compared or used in a branch, so everything that reads unit or
+-- quest data goes through these helpers.
+--
+-- Since 1.27 they are LibForever-1.0's (Base.lua in ForeverAPI's lib/), under the names they always had here.
 
 local Core = NorgannonCore
+local LF = Core.LibForever
 
-local interface = select(4, GetBuildInfo())
+local Client = LF.Client
+Core.Client = Client
 Core.client = {
-  interface = interface,
-  isForever = interface >= 16000 and interface < 17000,
+  interface = Client.Interface(),
+  isForever = Client.IsForever(),
   locale = GetLocale(),
 }
 
--------------------------------------------------------------------------------------------
--- Which client (1.23). Don't trust WOW_PROJECT_ID on Forever: it is 18, WOW_PROJECT_CAMELOT (ForeverAPI), neither
--- Classic (2) nor Mainline (1), so libraries that branch on it take neither branch (HereBeDragons needed a patch for
--- exactly this). The interface number is what tells: Forever is 16000-16999 (16001 on client 1.60.1).
--------------------------------------------------------------------------------------------
+-- secret values and calling the client (1.19)
+Core.IsSecret, Core.Safe = LF.IsSecret, LF.Safe
+Core.Fn, Core.Has, Core.Call, Core.Plain = LF.Fn, LF.Has, LF.Call, LF.Plain
+Core.Global, Core.In, Core.SetSecret, Core.Now = LF.Global, LF.In, LF.SetSecret, LF.Now
 
-local Client = {}
-Core.Client = Client
+-- combat lockdown, the next frame, and "may we act now?" (1.20)
+Core.AfterCombat, Core.NextFrame, Core.Restricted = LF.AfterCombat, LF.NextFrame, LF.Restricted
 
----true on WoW Forever.
-function Client.IsForever() return Core.client.isForever end
-
----The interface number from the TOC's point of view: 16001 on Forever 1.60.1.
-function Client.Interface() return interface end
-
--- the game's own project ids, by the constant's name, for clients that aren't Forever
-local PROJECTS = {
-  { "WOW_PROJECT_CLASSIC", "classic" }, { "WOW_PROJECT_BURNING_CRUSADE_CLASSIC", "tbc" },
-  { "WOW_PROJECT_WRATH_CLASSIC", "wrath" }, { "WOW_PROJECT_CATACLYSM_CLASSIC", "cata" },
-  { "WOW_PROJECT_MISTS_CLASSIC", "mists" }, { "WOW_PROJECT_MAINLINE", "retail" },
-}
-
----"forever", else what WOW_PROJECT_ID says ("classic", "tbc", "wrath", "cata", "mists", "retail"), else "unknown".
-function Client.Flavor()
-  if Core.client.isForever then return "forever" end
-  local id = rawget(_G, "WOW_PROJECT_ID")
-  for _, p in ipairs(PROJECTS) do
-    local value = rawget(_G, p[1])
-    if id ~= nil and value ~= nil and id == value then return p[2] end
-  end
-  return "unknown"
-end
-
----true where the world is Classic's (Forever and the Classic Era client): its maps, zones and quests. Use this,
----not WOW_PROJECT_ID, to pick Classic map data.
-function Client.IsClassicWorld()
-  local flavor = Client.Flavor()
-  return flavor == "forever" or flavor == "classic"
-end
-
----true if v is a secret value (or a table holding them) that must not be inspected.
-function Core.IsSecret(v)
-  if issecretvalue and issecretvalue(v) then return true end
-  if type(v) == "table" and issecrettable and issecrettable(v) then return true end
-  return false
-end
-
----v, or fallback when v is secret.
-function Core.Safe(v, fallback)
-  if Core.IsSecret(v) then return fallback end
-  return v
-end
-
--------------------------------------------------------------------------------------------
--- Calling the client (1.19). The API docs list calls for every game flavour, so any of them may
--- be missing on Forever, refuse (error), or answer in secret values. These are the suite's one
--- way to call it; add-ons used to carry their own copies.
--------------------------------------------------------------------------------------------
-
----The client function ns.name, or the global name when ns is nil; nil if the client lacks it.
-function Core.Fn(ns, name)
-  local fn
-  if ns == nil then
-    fn = rawget(_G, name)
-  else
-    local t = rawget(_G, ns)
-    fn = type(t) == "table" and t[name] or nil
-  end
-  return type(fn) == "function" and fn or nil
-end
-
----true if the client has ns.name (or the global name when ns is nil).
-function Core.Has(ns, name) return Core.Fn(ns, name) ~= nil end
-
----fn(...) through pcall: ok, ... with the answer exactly as it came, secrets included. For handing values to
----widgets that accept secrets. ok is false when fn is missing or errored.
-function Core.Call(fn, ...)
-  if type(fn) ~= "function" then return false end
-  return pcall(fn, ...)
-end
-
-local function plain(ok, ...)
-  if not ok then return nil end
-  local n = select("#", ...)
-  if n == 0 then return nil end
-  local out = { ... }
-  for i = 1, n do
-    if Core.IsSecret(out[i]) then out[i] = nil end
-  end
-  return unpack(out, 1, n)
-end
-
----fn(...) with every secret value turned into nil, and nil when fn is missing or errored: for logic that branches.
-function Core.Plain(fn, ...)
-  if type(fn) ~= "function" then return nil end
-  return plain(pcall(fn, ...))
-end
-
----The global client function name(...), through Core.Plain.
-function Core.Global(name, ...) return Core.Plain(Core.Fn(nil, name), ...) end
-
----The namespaced client function ns.name(...), through Core.Plain: Core.In("C_Bank", "CanViewBank").
-function Core.In(ns, name, ...) return Core.Plain(Core.Fn(ns, name), ...) end
-
----obj:method(...) where the arguments may be secret (a widget that accepts them): false if the client refused.
-function Core.SetSecret(obj, method, ...)
-  local fn = obj and obj[method]
-  if type(fn) ~= "function" then return false end
-  return (pcall(fn, obj, ...))
-end
-
----The server's time (seconds), else the computer's.
-function Core.Now() return Core.Global("GetServerTime") or time() end
-
--------------------------------------------------------------------------------------------
--- Combat lockdown: protected work waits for the end of combat
--------------------------------------------------------------------------------------------
-
-local queue, slotOfKey = {}, {}   -- fn, ... in order; key -> that key's place in the queue
-
----Runs fn now, or once combat ends. A key replaces an earlier queued call with the same key,
----so repeated requests (e.g. "re-anchor the tracker") run only once.
-function Core:AfterCombat(fn, key)
-  if not InCombatLockdown() then
-    Core.SafeCall(fn)
-    return true
-  end
-  if key and slotOfKey[key] then
-    queue[slotOfKey[key]] = fn
-  else
-    table.insert(queue, fn)
-    if key then slotOfKey[key] = #queue end
-  end
-  return false
-end
-
-Core:On("PLAYER_REGEN_ENABLED", "combatQueue", function()
-  local pending = queue
-  queue, slotOfKey = {}, {}
-  for _, fn in ipairs(pending) do Core.SafeCall(fn) end
-end)
+-- NORGANNON_RESTRICTIONS_CHANGED, the suite's name for LibForever's message: combat or a restriction started or ended
+Core:Listen(LF.RESTRICTIONS_CHANGED, "core.restrictions", function() Core:Send("NORGANNON_RESTRICTIONS_CHANGED") end)
 
 -------------------------------------------------------------------------------------------
 -- Minimap shapes: which quadrants of the minimap are round, for the map layer and the buttons
@@ -180,61 +52,4 @@ function Core.IsMinimapRoundAt(shape, x, y)
   local column = x < 0 and 1 or 3
   if y > 0 then return shape[column] end
   return shape[column + 1]
-end
-
--------------------------------------------------------------------------------------------
--- Next frame
--------------------------------------------------------------------------------------------
-
-local scheduled = {}   -- keys waiting for their next-frame call
-
----fn on the next frame (coalesces bursts of events into one update when given a key).
-function Core:NextFrame(fn, key)
-  if key then
-    if scheduled[key] then return end
-    scheduled[key] = true
-  end
-  C_Timer.After(0, function()
-    if key then scheduled[key] = nil end
-    Core.SafeCall(fn)
-  end)
-end
-
--------------------------------------------------------------------------------------------
--- Restrictions (1.20): one answer to "may we act now?". The client's own restriction check read
--- false in open-world combat (ApiProbe, 2026-11-07), so combat is InCombatLockdown's call.
--------------------------------------------------------------------------------------------
-
--- what each question checks: the client's restriction kinds (Enum.AddOnRestrictionType) and chat lockdown
-local KINDS = {
-  combat = { combat = true },
-  fight = { combat = true, kinds = { "Combat", "Encounter", "ChallengeMode", "PvPMatch" } },  -- a fight or a match of any kind
-  send = { lockdown = true, kinds = { "Chat", "Encounter", "ChallengeMode", "PvPMatch" } },   -- add-on messages
-}
-
-local function restrictionActive(name)
-  local enum = rawget(_G, "Enum") and Enum.AddOnRestrictionType
-  local value = enum and enum[name]
-  if value == nil then return false end
-  return Core.In("C_RestrictedActions", "IsAddOnRestrictionActive", value) == true
-end
-
----Why `what` can't happen now, or nil when it can. what: "combat" (protected frames), "fight" (anything a player
----wouldn't want to happen mid-fight: moving items, popups; combat, an encounter, M+ or a PvP match) or "send" (add-on
----messages: chat lockdown, or a restriction that covers them). Reasons: "combat", "lockdown" or a restriction's name.
-function Core:Restricted(what)
-  local spec = KINDS[what or "fight"] or KINDS.fight
-  if spec.combat and InCombatLockdown and InCombatLockdown() then return "combat" end
-  if spec.lockdown and Core.In("C_ChatInfo", "InChatMessagingLockdown") then return "lockdown" end
-  for _, name in ipairs(spec.kinds or {}) do
-    if restrictionActive(name) then return name end
-  end
-  return nil
-end
-
--- NORGANNON_RESTRICTIONS_CHANGED when combat or any restriction starts or ends, so add-ons can hold and resume
-for _, event in ipairs({ "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ADDON_RESTRICTION_STATE_CHANGED" }) do
-  Core:On(event, "core.restrictions", function()
-    Core:NextFrame(function() Core:Send("NORGANNON_RESTRICTIONS_CHANGED") end, "core.restrictions")
-  end)
 end
