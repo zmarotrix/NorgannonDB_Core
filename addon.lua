@@ -3,7 +3,7 @@
 -- the minimap flyout row, the game's add-on menu (compartment), the slash command and opening its settings page.
 --
 --   local Core = NorgannonCore
---   if not (Core and Core.NewAddon) then print("Template needs NorgannonDB Core 1.19 or newer; it is turned off.") return end
+--   if not (Core and Core.NewAddon) then print("Template needs Norgannon Core 1.19 or newer; it is turned off.") return end
 --   local A = Core:NewAddon("template", {
 --     folder = ..., api = { 1, 19 },
 --     db = "TemplateDB", defaults = { shown = true }, version = 1,

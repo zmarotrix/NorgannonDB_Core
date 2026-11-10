@@ -65,7 +65,7 @@ function Core:AddonState(key)
   return "missing"
 end
 
----Why an add-on that loaded turned itself off ("needs NorgannonDB Core 1.22 or newer"), or nil.
+---Why an add-on that loaded turned itself off ("needs Norgannon Core 1.22 or newer"), or nil.
 function Core:AddonProblem(key)
   return registered[key] and registered[key].problem
 end
