@@ -2,6 +2,15 @@
 
 Earlier versions are in the git history.
 
+## 1.28.1 (2026-11-09)
+
+- **Fixed "NorgannonDB_Core tried to call the protected function Button:SetPassThroughButtons()"** when opening the
+  map or quest log. Add-ons in the suite opened or switched Blizzard's world map from their own code ("Show on map").
+  The map then built its own quest pins inside add-on code, and the pin pool stayed tainted for the session.
+  `Core.Map:Reveal(area, key)` replaces that: it pulses the pins now if the map is open on their zone, or when the
+  player next opens it there, and never opens or switches the map itself. Clairvoyance and Oracle use it.
+  `platform_test.py` fails any suite add-on that opens or switches Blizzard's map.
+
 ## 1.28.0 (2026-11-09)
 
 - `Core.Net` and `Core:Say` / `Core:OpenChat` are LibForever-1.0's too (phase 2 of the toolkit), the same table and

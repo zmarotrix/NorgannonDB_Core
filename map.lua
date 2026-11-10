@@ -34,6 +34,7 @@ local DEFAULT_PIN_SIZE = 7
 local HOVER_GROW = 1.25           -- a hovered pin's size
 local OVERLAP_REACH = .9          -- of a pin's size: closer than this, two pins with one overlapKey "stack"
 local CONTINENT_DOT, CONTINENT_ICON = 9, 14   -- marker sizes on continent maps: a plain pin, anything else
+local REVEAL_WAIT = 120           -- seconds a Reveal waits for the player to open the map on its zone
 local function ringSize(size) return size + math.max(4, math.floor(size * .5)) end   -- about 2 px of border each side
 
 local Icons = Core.MapIcons
@@ -421,6 +422,12 @@ function Map:RefreshWorld()
     C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_CHANGED", uiMap or nil, mapArea) end)
   end
   shownMap = uiMap
+  -- a Reveal waiting for the player to open the map on its zone
+  local wait = Map.pendingReveal
+  if wait and uiMap and uiMap == wait.uiMap then
+    Map.pendingReveal = nil
+    if GetTime() - wait.at <= REVEAL_WAIT then Map:Pulse(wait.key) end
+  end
   local area = uiMap and Map.UiMapToArea(uiMap)
   local pins = area and Map:PinsIn(area) or {}
   pinScale = canvasScale()
@@ -604,6 +611,27 @@ local PULSE_PERIOD, PULSE_GROW = .55, .9
 
 ---Pulses every pin of a highlight group (e.g. "q788") for duration seconds (default 1.6); the
 ---other groups dim meanwhile, as when hovering. Works on pins drawn later too (map just opened).
+---Draws the eye to pins on Blizzard's world map WITHOUT opening or switching it. Add-on code must
+---never do either (OpenWorldMap, C_Map.OpenWorldMap, WorldMapFrame:SetMapID or :Show,
+---QuestMapFrame_OpenToQuestDetails): the map then builds its own quest pins inside add-on code, the
+---pin pool stays tainted for the session, and every later open of the map or quest log fails
+---("NorgannonDB_Core tried to call the protected function Button:SetPassThroughButtons()").
+---If the map is open on the pins' zone they pulse now; otherwise they pulse when the player next
+---opens the map there (within REVEAL_WAIT seconds). Returns true when shown now, else false and the
+---zone's name to tell the player.
+function Map:Reveal(area, key)
+  local uiMap = area and Map.AreaToUiMap(area)
+  if not uiMap then return false, nil end
+  if WorldMapFrame:IsShown() and WorldMapFrame:GetMapID() == uiMap then
+    self.pendingReveal = nil
+    self:Pulse(key)
+    return true
+  end
+  self.pendingReveal = { uiMap = uiMap, key = key, at = GetTime() }
+  local info = C_Map.GetMapInfo(uiMap)
+  return false, info and info.name
+end
+
 function Map:Pulse(key, duration)
   self.pulse = { key = key, start = GetTime(), duration = duration or 1.6 }
   self:SetHighlight(key)
