@@ -252,6 +252,7 @@ world:SetFrameLevel(WORLD_LEVEL)
 Map.worldLayer = world
 
 local worldPins, areaFrames = {}, {}
+local openMap, liftAbove, stitchedPins, stitchedPlacer   -- OpenMap's stitched map (below)
 local pinScale, shownMap = 1, nil
 
 local function canvasScale()
@@ -260,6 +261,7 @@ local function canvasScale()
 end
 
 local function place(f, x, y)
+  f.px, f.py = x, y   -- where it's drawn: pin.x, pin.y, or (OpenMap's stitched map) its place on the canvas
   local px, py = x / 100 * world:GetWidth(), y / 100 * world:GetHeight()
   f:SetScale(pinScale)
   f:ClearAllPoints()
@@ -370,7 +372,7 @@ local function drawClusterGlows(clusters)
     f.glow:SetVertexColor(c[1], c[2], c[3], CLUSTER_GLOW_ALPHA)
     f.key = highlightKey(cluster.members[1])
     f.active = true
-    f:SetFrameLevel(WORLD_LEVEL + 1)
+    f:SetFrameLevel(world:GetFrameLevel() + 1)
     f:ClearAllPoints()
     f:SetSize(cluster.rx * 2 / 100 * world:GetWidth(), cluster.ry * 2 / 100 * world:GetHeight())
     f:SetPoint("CENTER", world, "TOPLEFT", cluster.x / 100 * world:GetWidth(), -cluster.y / 100 * world:GetHeight())
@@ -384,15 +386,21 @@ local function drawClusterGlows(clusters)
   return count
 end
 
--- draws the world pins; returns how many were drawn and how many were skipped as overlapping
-local function drawWorldPins(pins)
+-- draws the world pins; returns how many were drawn and how many were skipped as overlapping.
+-- pos(pin) -> x, y (percent of the canvas) places pins from other zones (OpenMap); default pin.x, pin.y
+local function drawWorldPins(pins, pos)
   resetDrawn()
   local w, h = world:GetWidth(), world:GetHeight()
+  local base = world:GetFrameLevel()
   local count, overlapped = 0, 0
   for _, pin in ipairs(pins) do
+    local x, y
     if pin.world ~= false then
+      if pos then x, y = pos(pin) else x, y = pin.x, pin.y end
+    end
+    if x then
       local key = pin.overlapKey
-      if key and overlapsDrawn(key, pin.x / 100 * w / pinScale, pin.y / 100 * h / pinScale,
+      if key and overlapsDrawn(key, x / 100 * w / pinScale, y / 100 * h / pinScale,
           (pin.size or DEFAULT_PIN_SIZE) * OVERLAP_REACH) then
         overlapped = overlapped + 1
       else
@@ -400,8 +408,8 @@ local function drawWorldPins(pins)
         local f = worldPins[count] or newPin(world)
         worldPins[count] = f
         dress(f, pin, pin.size or DEFAULT_PIN_SIZE, pin.alpha)
-        f:SetFrameLevel(WORLD_LEVEL + 2 + (pin.layer or 1))
-        place(f, pin.x, pin.y)
+        f:SetFrameLevel(base + 2 + (pin.layer or 1))
+        place(f, x, y)
         f:Show()
       end
     end
@@ -411,6 +419,90 @@ local function drawWorldPins(pins)
     worldPins[i].pin = nil
   end
   return count, overlapped
+end
+
+-------------------------------------------------------------------------------------------
+-- OpenMap (OpenMapAPI, a seamless world map): its stitched map keeps Blizzard's map underneath,
+-- following the view, and draws every zone's art around it. The layer stays on the canvas of the
+-- map underneath; pins of the zones in view are placed through OpenMap (WorldFromMap, then
+-- MapFromWorld onto the map underneath: no yards, so no axis to get wrong) and lifted above its
+-- art (ArtTopLevel). Its ViewChanged / StitchedChanged callbacks redraw. Without OpenMap, or on
+-- its non-stitched maps, nothing changes.
+-------------------------------------------------------------------------------------------
+
+local OPENMAP_AREAS = 9                 -- zones in view whose pins are drawn (the nearest first)
+local stitchUV = setmetatable({}, { __mode = "k" })   -- pin -> { u, v } on the stitched world, or false
+local openMapHooked
+
+openMap = function()
+  local api = rawget(_G, "OpenMapAPI")
+  if not (type(api) == "table" and api.major == 1 and api.IsStitched and api.MapFromWorld and api.WorldFromMap) then return nil end
+  if not openMapHooked and api.RegisterCallback then
+    openMapHooked = true
+    local function redraw() worldDirty = true end
+    pcall(api.RegisterCallback, Map, "OpenMap_ViewChanged", redraw)
+    pcall(api.RegisterCallback, Map, "OpenMap_StitchedChanged", redraw)
+  end
+  local ok, on = pcall(api.IsStitched)
+  return ok and on and api or nil
+end
+---Whether the world map shows OpenMap's stitched map now.
+function Map.OpenMapStitched() return openMap() ~= nil end
+
+-- above the stitched art (a frame level change on the map waits out combat, as OpenMap's own do)
+liftAbove = function(api)
+  local ok, top = false, nil
+  if api.ArtTopLevel then ok, top = pcall(api.ArtTopLevel) end
+  local want = ok and type(top) == "number" and math.max(WORLD_LEVEL, top + 2) or WORLD_LEVEL
+  if world:GetFrameLevel() ~= want and not InCombatLockdown() then world:SetFrameLevel(want) end
+end
+
+-- the zones in view: OpenMap's zone at points spreading out from the view's centre
+local function zonesInView(api, hostArea)
+  local list, seen = {}, {}
+  local function add(a) if a and not seen[a] then seen[a] = true list[#list + 1] = a end end
+  add(hostArea)
+  if not (api.GetView and api.MapAt) then return list end
+  local ok, u, v, zoom = pcall(api.GetView)
+  if not (ok and u and zoom and zoom > 0) then return list end
+  local half = .6 / zoom
+  for ring = 1, 3 do
+    for i = -ring, ring do
+      for j = -ring, ring do
+        if (i == -ring or i == ring or j == -ring or j == ring) and #list < OPENMAP_AREAS then
+          local okAt, m = pcall(api.MapAt, u + half * i / 3, v + half * j / 3)
+          add(okAt and m and Map.UiMapToArea(m) or nil)
+        end
+      end
+    end
+  end
+  return list
+end
+
+stitchedPins = function(api, hostArea, hostPins)
+  local out = {}
+  for _, area in ipairs(zonesInView(api, hostArea)) do
+    for _, pin in ipairs(area == hostArea and hostPins or Map:PinsIn(area)) do out[#out + 1] = pin end
+  end
+  return out
+end
+
+-- pin -> x, y in percent of the canvas of the map underneath (its own zone's pins as they are)
+stitchedPlacer = function(api, hostMap, hostArea)
+  return function(pin)
+    if pin.area == hostArea then return pin.x, pin.y end
+    local uv = stitchUV[pin]
+    if uv == nil then
+      local zone = Map.AreaToUiMap(pin.area)
+      local ok, u, v = false, nil, nil
+      if zone then ok, u, v = pcall(api.WorldFromMap, zone, pin.x / 100, pin.y / 100) end
+      uv = ok and u and { u, v } or false
+      stitchUV[pin] = uv
+    end
+    if not uv then return nil end
+    local ok, x, y = pcall(api.MapFromWorld, hostMap, uv[1], uv[2])
+    if ok and x and y then return x * 100, y * 100 end
+  end
 end
 
 function Map:RefreshWorld()
@@ -434,6 +526,22 @@ function Map:RefreshWorld()
   local continent = uiMap and not isZoneMap(uiMap)
   if continent then pins = continentMarkers(uiMap) end
 
+  -- OpenMap's stitched map shows the zones around the one underneath too: their pins, placed
+  -- through OpenMap, above its art (glows stay with the zone underneath)
+  local api = uiMap and openMap()
+  if api then
+    liftAbove(api)
+    if not continent then
+      local zonePins = pins
+      local glowCount = drawClusterGlows(clusterPins(zonePins))
+      local count, skipped = drawWorldPins(stitchedPins(api, area, zonePins), stitchedPlacer(api, uiMap, area))
+      Map.stats.world, Map.stats.clusters, Map.stats.overlapped = count, glowCount, skipped
+      return
+    end
+  elseif world:GetFrameLevel() ~= WORLD_LEVEL and not InCombatLockdown() then
+    world:SetFrameLevel(WORLD_LEVEL)
+  end
+
   local glows = drawClusterGlows(continent and {} or clusterPins(pins))
   local drawn, overlapped = drawWorldPins(pins)
   Map.stats.world, Map.stats.clusters, Map.stats.overlapped = drawn, glows, overlapped
@@ -445,7 +553,7 @@ local function rescaleWorld()
   pinScale = s
   worldDirty = true   -- zoom changes which overlapping pins are hidden: redraw on the next tick
   for _, f in ipairs(worldPins) do
-    if f:IsShown() and f.pin then place(f, f.pin.x, f.pin.y) end
+    if f:IsShown() and f.pin then place(f, f.px or f.pin.x, f.py or f.pin.y) end
   end
 end
 

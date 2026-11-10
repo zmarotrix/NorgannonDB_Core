@@ -2,6 +2,14 @@
 
 Earlier versions are in the git history.
 
+## 1.28.2 (2026-11-09)
+
+- **Works with OpenMap**, the seamless world map. On its stitched map, the suite's pins (quests, tracking, gathering,
+  rares, Oracle's entrances) now show for every zone in view, not just the one under the centre, and draw above
+  OpenMap's map art instead of under it. They are placed through OpenMap's own API (`OpenMapAPI.WorldFromMap` and
+  `MapFromWorld`) and redraw when its view moves. On Blizzard's own map, or without OpenMap, nothing changes.
+  `Core.Map.OpenMapStitched()` says whether the stitched map is up.
+
 ## 1.28.1 (2026-11-09)
 
 - **Fixed "NorgannonDB_Core tried to call the protected function Button:SetPassThroughButtons()"** when opening the
