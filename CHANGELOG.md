@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.28.3 (2026-11-10)
+
+- Each quest in `Core.Player` carries `header`: the quest log's header above it (its zone or category, as the game names it). Add-ons use it for quests no database knows.
+
 ## 1.28.2 (2026-11-09)
 
 - **Works with OpenMap**, the seamless world map. On its stitched map, the suite's pins (quests, tracking, gathering,

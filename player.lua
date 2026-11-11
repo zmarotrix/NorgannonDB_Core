@@ -93,9 +93,12 @@ end
 local function scan()
   local quests = {}
   if not (C_QuestLog and C_QuestLog.GetNumQuestLogEntries) then return quests end
+  local header   -- the log's header above each quest (its zone or category), for quests no database knows
   for index = 1, C_QuestLog.GetNumQuestLogEntries() do
     local info = C_QuestLog.GetInfo(index)
-    if public(info) and not info.isHeader and info.questID and not IsSecret(info.questID) then
+    if public(info) and info.isHeader then
+      header = type(info.title) == "string" and not IsSecret(info.title) and info.title or nil
+    elseif public(info) and info.questID and not IsSecret(info.questID) then
       local id = info.questID
       local complete = false
       if C_QuestLog.IsFailed and C_QuestLog.IsFailed(id) then
@@ -104,7 +107,7 @@ local function scan()
         complete = true
       end
       quests[id] = {
-        id = id, title = info.title, level = info.level, logIndex = index,
+        id = id, title = info.title, level = info.level, logIndex = index, header = header,
         complete = complete, objectives = readObjectives(id),
       }
     end
