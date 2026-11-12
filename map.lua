@@ -253,6 +253,7 @@ Map.worldLayer = world
 
 local worldPins, areaFrames = {}, {}
 local openMap, liftAbove, stitchedPins, stitchedPlacer   -- OpenMap's stitched map (below)
+local setZonesInView
 local pinScale, shownMap = 1, nil
 
 local function canvasScale()
@@ -479,9 +480,9 @@ local function zonesInView(api, hostArea)
   return list
 end
 
-stitchedPins = function(api, hostArea, hostPins)
+stitchedPins = function(zones, hostArea, hostPins)
   local out = {}
-  for _, area in ipairs(zonesInView(api, hostArea)) do
+  for _, area in ipairs(zones) do
     for _, pin in ipairs(area == hostArea and hostPins or Map:PinsIn(area)) do out[#out + 1] = pin end
   end
   return out
@@ -504,6 +505,21 @@ stitchedPlacer = function(api, hostMap, hostArea)
     if ok and x and y then return x * 100, y * 100 end
   end
 end
+
+-- the zones whose pins the world map shows: the zone map's own, or (OpenMap's stitched map) every
+-- zone in view. NORGANNON_WORLDMAP_ZONES (zones) announces a change, so add-ons that make pins per
+-- zone (Clairvoyance's quest givers) can make them for every zone you're looking at.
+local zonesShown, zonesKey = {}, ""
+
+setZonesInView = function(zones)
+  local key = table.concat(zones, ",")
+  if key == zonesKey then return end
+  zonesShown, zonesKey = zones, key
+  C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_ZONES", zones) end)
+end
+
+---The areas whose pins the world map shows now (empty when it's closed or shows a continent).
+function Map.ZonesInView() return zonesShown end
 
 function Map:RefreshWorld()
   worldDirty = false
@@ -529,12 +545,14 @@ function Map:RefreshWorld()
   -- OpenMap's stitched map shows the zones around the one underneath too: their pins, placed
   -- through OpenMap, above its art (glows stay with the zone underneath)
   local api = uiMap and openMap()
+  local zones = (api and not continent) and zonesInView(api, area) or ((area and not continent) and { area } or {})
+  setZonesInView(zones)
   if api then
     liftAbove(api)
     if not continent then
       local zonePins = pins
       local glowCount = drawClusterGlows(clusterPins(zonePins))
-      local count, skipped = drawWorldPins(stitchedPins(api, area, zonePins), stitchedPlacer(api, uiMap, area))
+      local count, skipped = drawWorldPins(stitchedPins(zones, area, zonePins), stitchedPlacer(api, uiMap, area))
       Map.stats.world, Map.stats.clusters, Map.stats.overlapped = count, glowCount, skipped
       return
     end

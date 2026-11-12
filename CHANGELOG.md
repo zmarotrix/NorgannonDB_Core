@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.28.4 (2026-11-11)
+
+- `Core.Map.ZonesInView()` lists the zones whose pins the world map shows: the zone map's own, or, on OpenMap's stitched map, every zone in view. `NORGANNON_WORLDMAP_ZONES (zones)` announces a change. Add-ons that make pins zone by zone use it to cover every zone you're looking at.
+
 ## 1.28.3 (2026-11-10)
 
 - Each quest in `Core.Player` carries `header`: the quest log's header above it (its zone or category, as the game names it). Add-ons use it for quests no database knows.
