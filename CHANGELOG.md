@@ -2,6 +2,11 @@
 
 Earlier versions are in the git history.
 
+## 1.28.5 (2026-11-11)
+
+- Continent maps take pins that opt in (`continent = true`, grouped by `continentGroup`), not only quest pins. Opted-in pins with a `continentMerge` key that land close together become one marker, and its tooltip lists them (up to five, then "and N more").
+- On a continent map, `Map.ZonesInView()` lists every zone on the continent and returns `true` as its second value. `NORGANNON_WORLDMAP_ZONES` carries the same flag.
+
 ## 1.28.4 (2026-11-11)
 
 - `Core.Map.ZonesInView()` lists the zones whose pins the world map shows: the zone map's own, or, on OpenMap's stitched map, every zone in view. `NORGANNON_WORLDMAP_ZONES (zones)` announces a change. Add-ons that make pins zone by zone use it to cover every zone you're looking at.

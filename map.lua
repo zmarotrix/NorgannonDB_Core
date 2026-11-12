@@ -284,8 +284,56 @@ end
 
 -- Continent and world maps: one marker per objective (the centre of its spawns in a zone)
 -- and per turn-in, translated from the zone's map. Every spawn at this scale would be
--- confetti, and available quests are left out (hundreds per continent). Pins opt out with
--- continent = false; only quest pins (quest or compass key) are shown.
+-- confetti. Pins opt out with continent = false; quest pins (quest or compass key) are shown,
+-- and other pins opt in with continent = true (Clairvoyance's quest givers). Opted-in pins with
+-- a continentMerge key that land close together (a town's givers) become one marker, its
+-- tooltip listing them: "!" by the dozen in one spot reads as nothing.
+local CONTINENT_MERGE = 1.6       -- percent of the continent map: closer than this, givers merge
+local CONTINENT_MERGE_LIST = 5    -- a merged marker's tooltip lists this many, then "and N more"
+
+local function mergeMarkers(markers)
+  local out, groups = {}, {}
+  for _, m in ipairs(markers) do
+    local key = m.mergeKey
+    local into
+    if key then
+      for _, g in ipairs(groups[key] or {}) do
+        if math.abs(g.x - m.x) < CONTINENT_MERGE and math.abs(g.y - m.y) < CONTINENT_MERGE then into = g break end
+      end
+    end
+    if into then
+      into.members[#into.members + 1] = m
+    else
+      out[#out + 1] = m
+      if key then
+        m.members = { m }
+        groups[key] = groups[key] or {}
+        table.insert(groups[key], m)
+      end
+    end
+  end
+  for _, m in ipairs(out) do
+    local members = m.members
+    if members and #members > 1 then
+      local one = m.tooltip
+      m.title = #members .. " " .. (m.mergeLabel or "places")
+      m.tooltip = function(pin, tt)
+        for i, member in ipairs(members) do
+          if i > CONTINENT_MERGE_LIST then
+            local c = UI.C.muted
+            tt:AddLine(string.format("and %d more", #members - CONTINENT_MERGE_LIST), c[1], c[2], c[3])
+            break
+          end
+          if i > 1 then tt:AddLine(" ") end
+          Core.SafeCall(member == m and one or member.tooltip, member, tt)
+        end
+      end
+    end
+    m.members = nil
+  end
+  return out
+end
+
 local function continentMarkers(uiMap)
   if indexDirty then rebuildIndex() end
   local groups, order = {}, {}
@@ -293,8 +341,9 @@ local function continentMarkers(uiMap)
     local zoneMap = Map.AreaToUiMap(area)
     if zoneMap and zoneMap ~= uiMap then
       for _, pin in ipairs(list) do
-        if pin.world ~= false and pin.continent ~= false and (pin.quest or pin.compass) then
-          local key = tostring(pin.compass or pin.cluster or ("q" .. pin.quest)) .. "@" .. area
+        if pin.world ~= false and pin.continent ~= false and (pin.quest or pin.compass or pin.continent == true) then
+          -- one marker per group per zone: its compass key, cluster, continentGroup (opted-in pins), or quest
+          local key = tostring(pin.compass or pin.cluster or pin.continentGroup or ("q" .. tostring(pin.quest))) .. "@" .. area
           local g = groups[key]
           if not g then
             g = { sx = 0, sy = 0, n = 0, pin = pin, zoneMap = zoneMap }
@@ -314,6 +363,7 @@ local function continentMarkers(uiMap)
       markers[#markers + 1] = {
         x = x * 100, y = y * 100, icon = pin.icon, quest = pin.quest, color = pin.color, colorKey = pin.colorKey,
         layer = pin.layer, size = (pin.icon == "pin" or pin.icon == nil) and CONTINENT_DOT or CONTINENT_ICON, title = pin.title,
+        mergeKey = pin.continentMerge, mergeLabel = pin.continentMergeLabel,
         tooltip = function(_, tt)
           if pin.tooltip then Core.SafeCall(pin.tooltip, pin, tt) else tt:AddLine(pin.title or "?", 1, 1, 1) end
           local info = C_Map.GetMapInfo(zoneMap)
@@ -323,6 +373,7 @@ local function continentMarkers(uiMap)
       }
     end
   end
+  markers = mergeMarkers(markers)
   table.sort(markers, function(a, b) return (a.layer or 1) < (b.layer or 1) end)
   return markers
 end
@@ -506,20 +557,41 @@ stitchedPlacer = function(api, hostMap, hostArea)
   end
 end
 
--- the zones whose pins the world map shows: the zone map's own, or (OpenMap's stitched map) every
--- zone in view. NORGANNON_WORLDMAP_ZONES (zones) announces a change, so add-ons that make pins per
--- zone (Clairvoyance's quest givers) can make them for every zone you're looking at.
-local zonesShown, zonesKey = {}, ""
+-- the zones whose pins the world map shows: the zone map's own, (OpenMap's stitched map) every
+-- zone in view, or (a continent map) every zone on the continent. NORGANNON_WORLDMAP_ZONES
+-- (zones, continent) announces a change, so add-ons that make pins per zone (Clairvoyance's quest
+-- givers) can make them for every zone you're looking at; continent is true on a continent map,
+-- where only pins that opt in (continent = true) show, as markers.
+local zonesShown, zonesKey, zonesContinent = {}, "", false
+local continentZones = {}   -- uiMap -> its zones' areas
 
-setZonesInView = function(zones)
-  local key = table.concat(zones, ",")
-  if key == zonesKey then return end
-  zonesShown, zonesKey = zones, key
-  C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_ZONES", zones) end)
+local function zonesOfContinent(uiMap)
+  local cached = continentZones[uiMap]
+  if cached then return cached end
+  local list, seen = {}, {}
+  local info = C_Map.GetMapInfo(uiMap)
+  if info and Enum and Enum.UIMapType and info.mapType == Enum.UIMapType.Continent and C_Map.GetMapChildrenInfo then
+    local ok, children = pcall(C_Map.GetMapChildrenInfo, uiMap, Enum.UIMapType.Zone, true)
+    for _, child in ipairs(ok and children or {}) do
+      local a = child.mapID and Map.UiMapToArea(child.mapID)
+      if a and not seen[a] then seen[a] = true list[#list + 1] = a end
+    end
+  end
+  if #list > 0 then continentZones[uiMap] = list end   -- (an empty answer is asked again: cheap)
+  return list
 end
 
----The areas whose pins the world map shows now (empty when it's closed or shows a continent).
-function Map.ZonesInView() return zonesShown end
+setZonesInView = function(zones, continent)
+  continent = continent and true or false
+  local key = table.concat(zones, ",")
+  if key == zonesKey and continent == zonesContinent then return end
+  zonesShown, zonesKey, zonesContinent = zones, key, continent
+  C_Timer.After(0, function() Core:Send("NORGANNON_WORLDMAP_ZONES", zones, continent) end)
+end
+
+---The areas whose pins the world map shows now, and whether it's a continent map (empty when the
+---map is closed or shows the whole world).
+function Map.ZonesInView() return zonesShown, zonesContinent end
 
 function Map:RefreshWorld()
   worldDirty = false
@@ -545,8 +617,11 @@ function Map:RefreshWorld()
   -- OpenMap's stitched map shows the zones around the one underneath too: their pins, placed
   -- through OpenMap, above its art (glows stay with the zone underneath)
   local api = uiMap and openMap()
-  local zones = (api and not continent) and zonesInView(api, area) or ((area and not continent) and { area } or {})
-  setZonesInView(zones)
+  local zones
+  if continent then zones = zonesOfContinent(uiMap)
+  elseif api then zones = zonesInView(api, area)
+  else zones = area and { area } or {} end
+  setZonesInView(zones, continent)
   if api then
     liftAbove(api)
     if not continent then
