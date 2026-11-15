@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.28.6 (2026-11-15)
+
+- Two new icons, `sword` and `bag` (`UI.TEX.sword`, `UI.TEX.bag`), white with a black rim and tinted in game. Clairvoyance uses them to mark quest mobs on nameplates.
+
 ## 1.28.5 (2026-11-11)
 
 - Continent maps take pins that opt in (`continent = true`, grouped by `continentGroup`), not only quest pins. Opted-in pins with a `continentMerge` key that land close together become one marker, and its tooltip lists them (up to five, then "and N more").

@@ -18,6 +18,7 @@ UI.TEX = {
   round = MEDIA .. "ui\\round", roundLine = MEDIA .. "ui\\round-line",
   viewDetailed = MEDIA .. "ui\\view-detailed", viewCompact = MEDIA .. "ui\\view-compact",
   gear = MEDIA .. "ui\\gear", star = MEDIA .. "ui\\star",
+  sword = MEDIA .. "ui\\sword", bag = MEDIA .. "ui\\bag",
 }
 
 ---{r, g, b, a} from "rrggbb".
