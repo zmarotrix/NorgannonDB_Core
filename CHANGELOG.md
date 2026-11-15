@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.28.7 (2026-11-15)
+
+- The `sword` and `bag` icons are redrawn in full colour: a steel blade with a gold guard, and a leather bag with a gold tie. They are meant to sit on a dark backing, not to be tinted.
+
 ## 1.28.6 (2026-11-15)
 
 - Two new icons, `sword` and `bag` (`UI.TEX.sword`, `UI.TEX.bag`), white with a black rim and tinted in game. Clairvoyance uses them to mark quest mobs on nameplates.
