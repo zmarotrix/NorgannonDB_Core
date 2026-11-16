@@ -27,7 +27,7 @@ Core.Map = Map
 
 local WORLD_LEVEL = 2015          -- Blizzard's map pins start around 2000; stay above them
 local CLUSTER_GLOW_ALPHA = .4     -- shown only on hover, so it can be fairly strong
-local MINIMAP_MAX = 150           -- most pins drawn on the minimap, nearest first
+local MINIMAP_MAX = 400           -- most pins drawn on the minimap, nearest first
 local MINIMAP_EDGE_MARGIN = 6     -- pixels: a pin closer to the edge than this isn't drawn
 local THROTTLE = 0.05             -- seconds between redraw checks
 local DEFAULT_PIN_SIZE = 7
@@ -64,6 +64,7 @@ local function NoCenter() return nil end
 -------------------------------------------------------------------------------------------
 
 local byArea = {}            -- area -> { pin, ... } across owners, sorted by layer
+local areaOrder = {}         -- byArea's areas in number order: the minimap walks them the same way every pass
 local indexDirty = true
 local worldDirty = true
 local worldPos = setmetatable({}, { __mode = "k" })   -- pin -> { x, y, instance } (or false)
@@ -77,14 +78,28 @@ end
 function Map:ClearPins(owner) self:SetPins(owner, nil) end
 
 local areaInstance = {}     -- area -> the instance its pins are in (false: none), filled by the minimap
-local function byLayer(a, b) return (a.layer or 1) < (b.layer or 1) end
+-- Each indexed pin's place in the index: a fixed tie-break, so pins at the same spot (two quests
+-- wanting one mob) keep the same one on top instead of swapping from pass to pass.
+local rank = setmetatable({}, { __mode = "k" })
+local function byLayer(a, b)
+  local la, lb = a.layer or 1, b.layer or 1
+  if la ~= lb then return la < lb end
+  return rank[a] < rank[b]
+end
 local resetDrawn   -- defined with the overlap rule
 
 local function rebuildIndex()
   byArea = {}
-  for _, pins in pairs(Map.owners) do
-    for _, pin in ipairs(pins) do
+  -- owners in name order, so the tie-break doesn't depend on hash order
+  local names = {}
+  for owner in pairs(Map.owners) do names[#names + 1] = owner end
+  table.sort(names, function(a, b) return tostring(a) < tostring(b) end)
+  local seq = 0
+  for _, owner in ipairs(names) do
+    for _, pin in ipairs(Map.owners[owner]) do
       if pin.area and pin.x and pin.y then
+        seq = seq + 1
+        rank[pin] = seq
         local list = byArea[pin.area]
         if not list then
           list = {}
@@ -94,9 +109,15 @@ local function rebuildIndex()
       end
     end
   end
-  for _, list in pairs(byArea) do
+  areaOrder = {}
+  for area, list in pairs(byArea) do
     table.sort(list, byLayer)
+    areaOrder[#areaOrder + 1] = area
   end
+  table.sort(areaOrder, function(x, y)
+    if type(x) == type(y) and type(x) == "number" then return x < y end
+    return tostring(x) < tostring(y)
+  end)
   indexDirty = false
   resetDrawn(true)
   areaInstance = {}
@@ -715,7 +736,11 @@ end
 -- every THROTTLE seconds, and a table per visible pin was most of the Core's memory churn.
 local visPin, visX, visY, visD, visOrder = {}, {}, {}, {}, {}
 local visLast = 0
-local function nearer(a, b) return visD[a] < visD[b] end
+local function nearer(a, b)
+  local da, db = visD[a], visD[b]
+  if da ~= db then return da < db end
+  return rank[visPin[a]] < rank[visPin[b]]   -- same spot: always the same order
+end
 
 function Map:RefreshMinimap()
   local n = 0
@@ -729,7 +754,8 @@ function Map:RefreshMinimap()
     stats.minimapRadius, stats.minimapInstance = view.radius, view.instance
     view.nearest = math.huge
     local count = 0
-    for area, pins in pairs(byArea) do
+    for _, area in ipairs(areaOrder) do
+      local pins = byArea[area]
       local instance = areaInstance[area]
       if instance == nil then
         local _, _, inst = worldOf(pins[1])

@@ -2,6 +2,11 @@
 
 Earlier versions are in the git history.
 
+## 1.28.8 (2026-11-15)
+
+- **The minimap draws up to 400 dots** (was 150), nearest first, so a crowded quest area no longer loses its outer dots.
+- **Dots on the same spot no longer flicker.** When two quests want the same mob, their dots used to swap which one was on top every redraw. The same one now stays on top.
+
 ## 1.28.7 (2026-11-15)
 
 - The `sword` and `bag` icons are redrawn in full colour: a steel blade with a gold guard, and a leather bag with a gold tie. They are meant to sit on a dark backing, not to be tinted.
