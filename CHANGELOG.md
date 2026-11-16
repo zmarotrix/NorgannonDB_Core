@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.28.9 (2026-11-15)
+
+- **Quests sharing a mob share its dot.** When two or more quests want the same mob, its dot is split into their colours (up to four), on the minimap and the world map, instead of one colour hiding the others. Hovering it lists every quest. The dot stays bright when any of its quests is highlighted.
+
 ## 1.28.8 (2026-11-15)
 
 - **The minimap draws up to 400 dots** (was 150), nearest first, so a crowded quest area no longer loses its outer dots.

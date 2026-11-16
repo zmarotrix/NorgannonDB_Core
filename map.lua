@@ -88,6 +88,50 @@ local function byLayer(a, b)
 end
 local resetDrawn   -- defined with the overlap rule
 
+-- Quest dots on one spot (two quests wanting the same mob) are drawn as one dot split into
+-- colour bands, one per quest: the first by rank leads, the rest follow it. groupOf[lead] is the
+-- whole group, leadOf[follower] its lead. A follower is skipped only when its lead was drawn in
+-- this pass (leadDrawn[lead] == pass), so it still shows when its lead is hidden or overlapped.
+local MAX_BANDS = 4
+local groupOf = setmetatable({}, { __mode = "k" })
+local leadOf = setmetatable({}, { __mode = "k" })
+local leadDrawn = setmetatable({}, { __mode = "k" })
+local pass = 0
+
+local function bandable(pin)
+  return (pin.icon == nil or pin.icon == "pin") and not pin.ring and (pin.quest or pin.colorKey or pin.color) ~= nil
+end
+
+local function colourId(pin)
+  return pin.color or pin.colorKey or pin.quest
+end
+
+local function groupSpots(list)
+  local at = {}
+  for _, pin in ipairs(list) do
+    if bandable(pin) then
+      local spot = string.format("%.2f:%.2f:%d:%s:%s", pin.x, pin.y, pin.layer or 1,
+        tostring(pin.world ~= false), tostring(pin.minimap ~= false))
+      local lead = at[spot]
+      if not lead then
+        at[spot] = pin
+      else
+        local group = groupOf[lead]
+        if not group then
+          group = { lead }
+          groupOf[lead] = group
+        end
+        local same = false   -- the same quest twice on one spot adds no band
+        for _, member in ipairs(group) do
+          if colourId(member) == colourId(pin) then same = true break end
+        end
+        if not same then group[#group + 1] = pin end
+        leadOf[pin] = lead
+      end
+    end
+  end
+end
+
 local function rebuildIndex()
   byArea = {}
   -- owners in name order, so the tie-break doesn't depend on hash order
@@ -110,9 +154,15 @@ local function rebuildIndex()
     end
   end
   areaOrder = {}
+  for pin in pairs(groupOf) do groupOf[pin] = nil end
+  for pin in pairs(leadOf) do leadOf[pin] = nil end
   for area, list in pairs(byArea) do
     table.sort(list, byLayer)
     areaOrder[#areaOrder + 1] = area
+    groupSpots(list)
+  end
+  for lead, group in pairs(groupOf) do
+    if #group < 2 then groupOf[lead] = nil end   -- only the same quest twice: an ordinary dot
   end
   table.sort(areaOrder, function(x, y)
     if type(x) == type(y) and type(x) == "number" then return x < y end
@@ -159,7 +209,15 @@ local applyHighlight   -- defined after the frame pools
 -- a pin frame's opacity: its own, dimmed when another group is highlighted
 local function highlightedAlpha(baseAlpha, pin)
   local key = Map.highlight
-  return baseAlpha * ((key and highlightKey(pin) ~= key) and DIM or 1)
+  if not key then return baseAlpha end
+  local group = groupOf[pin]
+  if group then   -- a split dot stays bright when any of its quests is highlighted
+    for _, member in ipairs(group) do
+      if highlightKey(member) == key then return baseAlpha end
+    end
+    return baseAlpha * DIM
+  end
+  return baseAlpha * ((highlightKey(pin) ~= key) and DIM or 1)
 end
 
 ---Highlights one group (dims the others on the world map, minimap and compass); nil clears.
@@ -169,6 +227,7 @@ function Map:SetHighlight(key)
   applyHighlight()
 end
 
+local WHITE = { 1, 1, 1 }
 local function pinColor(pin)
   if pin.color then return pin.color end
   local key = pin.colorKey or pin.quest
@@ -176,21 +235,37 @@ local function pinColor(pin)
 end
 Map.PinColor = pinColor
 
+-- lays a split dot's bands side by side across the dot (each shows its slice of the dot's texture)
+local function layoutBands(f, size)
+  local n = f.bandCount or 0
+  for i = 1, n do
+    local b = f.bands[i]
+    b:SetSize(size / n, size)
+    b:ClearAllPoints()
+    b:SetPoint("LEFT", f, "CENTER", -size / 2 + (i - 1) * size / n, 0)
+  end
+end
+
 local function pinEnter(self)
   local pin = self.pin
   if not pin then return end
   self.icon:SetSize(self.size * HOVER_GROW, self.size * HOVER_GROW)
+  layoutBands(self, self.size * HOVER_GROW)
   if self.ring then local r = ringSize(self.size * HOVER_GROW) self.ring:SetSize(r, r) end
   Map:SetHighlight(highlightKey(pin))
   GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-  if pin.tooltip then
-    Core.SafeCall(pin.tooltip, pin, GameTooltip)
-  elseif pin.title then
-    GameTooltip:AddLine(pin.title, 1, 1, 1)
+  for i, member in ipairs(groupOf[pin] or { pin }) do
+    if i > 1 then GameTooltip:AddLine(" ") end
+    if member.tooltip then
+      Core.SafeCall(member.tooltip, member, GameTooltip)
+    elseif member.title then
+      GameTooltip:AddLine(member.title, 1, 1, 1)
+    end
   end
   local faint = UI.C.faint
   if (pin.quest or pin.colorKey) and not pin.onClick then
-    GameTooltip:AddLine("Click: new colour  ·  Right-click: choose colour", faint[1], faint[2], faint[3])
+    GameTooltip:AddLine(groupOf[pin] and "Click: new colour for the first quest  ·  Right-click: choose it"
+      or "Click: new colour  ·  Right-click: choose colour", faint[1], faint[2], faint[3])
   end
   if pin.shiftHint then
     GameTooltip:AddLine(pin.shiftHint, faint[1], faint[2], faint[3])
@@ -200,6 +275,7 @@ end
 
 local function pinLeave(self)
   self.icon:SetSize(self.size, self.size)
+  layoutBands(self, self.size)
   if self.ring then local r = ringSize(self.size) self.ring:SetSize(r, r) end
   Map:SetHighlight(nil)
   GameTooltip:Hide()
@@ -242,6 +318,30 @@ local function dress(f, pin, size, alpha)
   f.size = size
   f:SetSize(size, size)
   f.icon:SetSize(size, size)
+  -- a split dot: one band per quest on this spot, the plain icon hidden under them
+  local group = tintable and groupOf[pin]
+  local n = group and math.min(#group, MAX_BANDS) or 0
+  f.bands = f.bands or {}
+  for i = 1, n do
+    local b = f.bands[i]
+    if not b then
+      b = f:CreateTexture(nil, "ARTWORK")
+      b:SetTexture(UI.TEX.pin)
+      f.bands[i] = b
+    end
+    b:SetTexCoord((i - 1) / n, i / n, 0, 1)
+    local bc = pinColor(group[i]) or WHITE
+    b:SetVertexColor(bc[1], bc[2], bc[3])
+    b:Show()
+  end
+  for i = n + 1, #f.bands do f.bands[i]:Hide() end
+  f.bandCount = n
+  if n > 0 then
+    layoutBands(f, size)
+    f.icon:SetAlpha(0)
+  else
+    f.icon:SetAlpha(1)
+  end
   local ring = pin.ring
   if ring then
     if not f.ring then
@@ -463,6 +563,7 @@ end
 -- pos(pin) -> x, y (percent of the canvas) places pins from other zones (OpenMap); default pin.x, pin.y
 local function drawWorldPins(pins, pos)
   resetDrawn()
+  pass = pass + 1
   local w, h = world:GetWidth(), world:GetHeight()
   local base = world:GetFrameLevel()
   local count, overlapped = 0, 0
@@ -471,12 +572,16 @@ local function drawWorldPins(pins, pos)
     if pin.world ~= false then
       if pos then x, y = pos(pin) else x, y = pin.x, pin.y end
     end
-    if x then
+    local lead = x and leadOf[pin]
+    if lead and leadDrawn[lead] == pass then
+      overlapped = overlapped + 1   -- a band of its lead's split dot
+    elseif x then
       local key = pin.overlapKey
       if key and overlapsDrawn(key, x / 100 * w / pinScale, y / 100 * h / pinScale,
           (pin.size or DEFAULT_PIN_SIZE) * OVERLAP_REACH) then
         overlapped = overlapped + 1
       else
+        if groupOf[pin] then leadDrawn[pin] = pass end
         count = count + 1
         local f = worldPins[count] or newPin(world)
         worldPins[count] = f
@@ -786,12 +891,15 @@ function Map:RefreshMinimap()
       count = MINIMAP_MAX
     end
     resetDrawn()   -- the same overlapKey rule as the world map, in minimap pixels
+    pass = pass + 1
     for i = 1, count do
       local v = visOrder[i]
       local pin, x, y = visPin[v], visX[v], visY[v]
       local key = pin.overlapKey
       local size = pin.minimapSize or DEFAULT_PIN_SIZE
-      if not (key and overlapsDrawn(key, x, y, size * OVERLAP_REACH)) then
+      local lead = leadOf[pin]
+      if not (lead and leadDrawn[lead] == pass) and not (key and overlapsDrawn(key, x, y, size * OVERLAP_REACH)) then
+        if groupOf[pin] then leadDrawn[pin] = pass end
         n = n + 1
         local f = miniPins[n] or newPin(Minimap)
         miniPins[n] = f
