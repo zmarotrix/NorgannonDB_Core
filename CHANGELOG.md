@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.29.0 (2026-11-16)
+
+- **Crafting specializations.** `Core.DB:RecipeSpec(spellId)` says which specialization a recipe needs (Armorsmith, Goblin Engineering, Tribal Leatherworking, ...), and `Core.DB:Specializations(skillLine)` lists a profession's specializations with their names and recipe counts, the Master smithing paths under Weaponsmith. They read NorgannonDB 1.7's `spec`; with older data they return nil and an empty list.
+
 ## 1.28.9 (2026-11-15)
 
 - **Quests sharing a mob share its dot.** When two or more quests want the same mob, its dot is split into their colours (up to four), on the minimap and the world map, instead of one colour hiding the others. Hovering it lists every quest. The dot stays bright when any of its quests is highlighted.

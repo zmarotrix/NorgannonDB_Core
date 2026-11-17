@@ -380,14 +380,20 @@ end
 ---One recipe by spell id, or nil.
 function DBX:Recipe(id) return recipes()[id] end
 
----The recipe's name in the client's language (the spell's name), else NorgannonDB's.
-function DBX:RecipeName(id)
+-- a spell's name in the client's language, or nil
+local function clientSpellName(id)
   local spell = rawget(_G, "C_Spell")
   local getName = spell and spell.GetSpellName or rawget(_G, "GetSpellInfo")
   if getName then
     local ok, name = pcall(getName, id)
     if ok and type(name) == "string" and name ~= "" then return name end
   end
+end
+
+---The recipe's name in the client's language (the spell's name), else NorgannonDB's.
+function DBX:RecipeName(id)
+  local name = clientSpellName(id)
+  if name then return name end
   local rec = recipes()[id]
   return rec and rec.name
 end
@@ -413,6 +419,61 @@ function DBX:RecipeTaughtBy(itemId) return recipeIndexed("taughtBy", itemId) end
 
 ---What disenchants into a material: { min, max = item levels, quality = {2, 3, 4} }, or nil.
 function DBX:DisenchantedFrom(itemId) return recipeIndexed("disenchant", itemId) end
+
+---The crafting specialization a recipe needs (its spell id: Armorsmith 9788, Goblin Engineering
+---20222, ...), or nil when anyone in the profession can learn it. NorgannonDB 1.7.
+function DBX:RecipeSpec(id)
+  local rec = recipes()[id]
+  return rec and rec.spec
+end
+
+local specCounts   -- { [skillLine] = { [specId] = recipe count } }, counted once
+
+---A profession's specializations that have recipes: { { id, name, count, parent }, ... }. name is the
+---client's spell name, else NorgannonDB's enUS one; parent is set on the Master smithing paths
+---(Weaponsmith's). Ordered by name, each parent followed by the ones under it. Empty without any.
+function DBX:Specializations(skill)
+  if not specCounts then
+    local DB = db()
+    if not (DB and DB.recipes) then return {} end
+    specCounts = {}
+    for _, rec in pairs(DB.recipes) do
+      if rec.spec then
+        local counts = specCounts[rec.skill] or {}
+        specCounts[rec.skill] = counts
+        counts[rec.spec] = (counts[rec.spec] or 0) + 1
+      end
+    end
+  end
+  local DB = db()
+  local facts = DB and DB.index and DB.index.recipes and DB.index.recipes.specs or {}
+  local tops, under = {}, {}
+  for id, count in pairs(specCounts[skill] or {}) do
+    local fact = facts[id] or {}
+    local entry = { id = id, name = clientSpellName(id) or fact.name, count = count, parent = fact.parent }
+    if entry.parent and specCounts[skill][entry.parent] then
+      under[entry.parent] = under[entry.parent] or {}
+      table.insert(under[entry.parent], entry)
+    else
+      tops[#tops + 1] = entry
+    end
+  end
+  local function byName(a, b)
+    if (a.name or "") ~= (b.name or "") then return (a.name or "") < (b.name or "") end
+    return a.id < b.id
+  end
+  table.sort(tops, byName)
+  local out = {}
+  for _, entry in ipairs(tops) do
+    out[#out + 1] = entry
+    local children = under[entry.id]
+    if children then
+      table.sort(children, byName)
+      for _, child in ipairs(children) do out[#out + 1] = child end
+    end
+  end
+  return out
+end
 
 ---A recipe's colour at a skill: "red" (can't learn it yet), "orange", "yellow", "green" or
 ---"grey" (no more skill-ups); nil without a skill.
