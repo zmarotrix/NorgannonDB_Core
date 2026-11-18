@@ -2,6 +2,10 @@
 
 Earlier versions are in the git history.
 
+## 1.30.0 (2026-11-18)
+
+- **Shorter item tooltips.** `Core.Tooltip`: each add-on adds one line to an item's tooltip, and the rest shows while Shift is held. `Core.Tooltip.Detail()` says whether Shift is down, and `Core.Tooltip.Head(tt, text, colour, more)` adds a heading with a faint "Shift: more" on the right, once per tooltip. Pressing or releasing Shift redraws an item tooltip. Clairvoyance, Dimension, Fortune and Retrospect use it.
+
 ## 1.29.0 (2026-11-16)
 
 - **Crafting specializations.** `Core.DB:RecipeSpec(spellId)` says which specialization a recipe needs (Armorsmith, Goblin Engineering, Tribal Leatherworking, ...), and `Core.DB:Specializations(skillLine)` lists a profession's specializations with their names and recipe counts, the Master smithing paths under Weaponsmith. They read NorgannonDB 1.7's `spec`; with older data they return nil and an empty list.
