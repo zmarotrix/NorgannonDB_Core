@@ -13,6 +13,8 @@
 --
 -- API: Comms:GetParty(questId) -> { [player] = { [i] = { id, type, fulfilled, required, finished } } }
 --      Comms:ProgressFor(kind, id) -> { {questId, player, index, objective}, ... }  (kind: "npcs", "objects", "items")
+--      Comms:Members() -> { { name, unit, key, shares }, ... }  your group, without you; shares = they've
+--        sent us their quest log, so a quest missing from it is one they don't have
 -- Messages: NORGANNON_PARTY_UPDATED (questId, player), NORGANNON_PARTY_CLEARED
 
 local Core = NorgannonCore
@@ -33,7 +35,7 @@ local MAX_BLOCK_BYTES = 200    -- a full-list block must fit one addon message
 
 local MSG = { UPDATE = 1, REMOVE = 2, FULL = 10, REQUEST = 11, FULL_V2 = 12, UPDATE_V2 = 14 }
 
-local Comms = { remote = {}, pending = {} }
+local Comms = { remote = {}, pending = {}, peers = {} }
 Core.Comms = Comms
 AceComm:Embed(Comms)
 
@@ -264,11 +266,33 @@ function Comms:OnCommReceived(prefix, message, distribution, sender)
   if isSelf(sender) or not CHANNELS[distribution] then return end
   local p = Comms.Deserialize(message)
   if type(p) ~= "table" or type(p.msgVer) ~= "number" or floor(p.msgVer) ~= MSG_VERSION then return end
+  if p.msgId ~= MSG.REQUEST then Comms.peers[sender] = true end   -- a request alone carries no quest log
   local handler = handlers[p.msgId]
   if handler then pcall(handler, p, sender) end   -- whatever a peer sends must not raise an error here
 end
 
 Comms:RegisterComm(PREFIX, "OnCommReceived")
+
+---Your group, without you, in party or raid order: { { name, unit, key, shares }, ... }. key: the
+---name their progress is stored under (GetParty's). shares: their
+---add-on has sent us its quest log (Clairvoyance or Questie), so what they lack, they don't have.
+---Empty when you're alone or the group is too big to share progress.
+function Comms:Members()
+  local out = {}
+  if not groupChannel() or GetNumGroupMembers() > MAX_GROUP then return out end
+  local raid = IsInRaid()
+  for i = 1, raid and GetNumGroupMembers() or 4 do
+    local unit = (raid and "raid" or "party") .. i
+    local name = UnitName(unit)
+    if name and name ~= UnitName("player") then
+      -- the key their messages arrive under (and GetParty's), with or without a realm
+      local full = GetUnitName(unit, true)
+      local key = (full and self.peers[full]) and full or name
+      out[#out + 1] = { name = name, unit = unit, key = key, shares = self.peers[key] == true }
+    end
+  end
+  return out
+end
 
 ---Party members' progress on a quest: { [player] = { [index] = objective } } (only players in your group).
 function Comms:GetParty(questId)
@@ -348,7 +372,7 @@ Core:Listen("NORGANNON_QUEST_REMOVED", "comms", function(_, id) changed(id, true
 local members = 0
 local function rosterChanged(event)
   if event == "GROUP_LEFT" then
-    Comms.remote, members = {}, 0
+    Comms.remote, Comms.peers, members = {}, {}, 0
     Core:Send("NORGANNON_PARTY_CLEARED")
     return
   end
@@ -367,6 +391,9 @@ local function rosterChanged(event)
     for player in pairs(players) do
       if not isGroupMember(player) then forget(questId, player) end
     end
+  end
+  for player in pairs(Comms.peers) do
+    if not isGroupMember(player) then Comms.peers[player] = nil end
   end
 end
 for _, event in ipairs({ "GROUP_JOINED", "GROUP_LEFT", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do
