@@ -123,7 +123,13 @@ end
 ---makes; onSubmit(text) on Enter (single line). Methods :SetText, :GetText, :SetFocus, :ClearFocus; .edit is the EditBox.
 function UI.Input(parent, opts)
   opts = opts or {}
-  local holder = UI.Pane(parent)
+  local holder = CreateFrame("Frame", nil, parent)
+  holder.box = UI.SoftBox(holder, "BACKGROUND", 0, 5)
+  function holder:Paint()
+    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
+  end
+  holder.ApplyAccent = UI.ApplyAccent
+  UI.AttachAccent(holder)
   local edit = CreateFrame("EditBox", nil, holder)
   edit:SetAutoFocus(false)
   edit:SetFontObject(UI.Font("body", opts.size or 13))
@@ -141,6 +147,19 @@ function UI.Input(parent, opts)
     end)
   end
   edit:SetScript("OnTextChanged", function(self, user) if user and opts.onChange then opts.onChange(self:GetText()) end end)
+  -- the outline follows the focus. Watched while it has it, not hooked on OnEditFocusLost: an add-on setting that script
+  -- (Mercy does) would drop the hook and leave the outline lit
+  local function watch(self)
+    if edit:HasFocus() then return end
+    self:SetScript("OnUpdate", nil)
+    self.focused = false
+    self:Paint()
+  end
+  edit:HookScript("OnEditFocusGained", function()
+    holder.focused = true
+    holder:Paint()
+    holder:SetScript("OnUpdate", watch)
+  end)
   holder.edit = edit
   function holder:SetText(text) edit:SetText(text or "") end
   function holder:GetText() return edit:GetText() end

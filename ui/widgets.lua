@@ -14,34 +14,35 @@ local WHITE = { 1, 1, 1 }
 -------------------------------------------------------------------------------------------
 
 local BUTTON_STYLES = {
-  -- style = function(accent, hover) -> border, fillTop, fillBottom, text
-  primary = function(_, hover)
-    if hover then return C.redBorder, UI.Mix(C.redTop, WHITE, .12), UI.Mix(C.redBottom, WHITE, .08), { 1, .95, .69 } end
-    return C.redBorder, C.redTop, C.redBottom, C.gold
+  -- style = function(accent, hover) -> fill, text
+  primary = function(accent, hover)
+    local fill = hover and UI.Mix(accent, WHITE, .2) or accent
+    return fill, UI.OnColor(fill)
   end,
   quiet = function(accent, hover)
-    return hover and accent or C.quietBorder, C.quietTop, C.quietBottom, hover and WHITE or C.quietText
+    return UI.Mix({ .165, .14, .115 }, accent, hover and .24 or .09), hover and WHITE or C.quietText
   end,
   accent = function(accent, hover)
-    local top = UI.Mix({ .106, .078, .063 }, accent, hover and .55 or .4)
-    return accent, top, { .07, .05, .035 }, WHITE
+    return UI.Mix({ .106, .078, .063 }, accent, hover and .48 or .34), WHITE
   end,
 }
 
----A text button: style "primary" (red and gold), "quiet" or "accent".
+---A text button: style "primary" (filled with the window's accent), "quiet" or "accent" (a darker accent).
 function UI.Button(parent, text, style, onClick)
   local b = CreateFrame("Button", nil, parent)
   b:SetHeight(24)
   b.style = BUTTON_STYLES[style] and style or "primary"
-  b.box = UI.Box(b, "BACKGROUND", 0)
+  b.box = UI.SoftBox(b, "BACKGROUND", 0, 5)
   b.label = UI.Text(b, "title", 13)
   b.label:SetPoint("CENTER", 0, 0)
   b.label:SetJustifyH("CENTER")
   b.accent = C.goldSoft
 
   function b:Paint()
-    local border, top, bottom, textColor = BUTTON_STYLES[self.style](self.accent, self.hover)
-    self.box:Set(border, top, bottom)
+    local fill, textColor = BUTTON_STYLES[self.style](self.accent, self.hover)
+    self.box:Set(nil, fill)
+    -- dark text on a light button reads cleaner without the drop shadow
+    self.label:SetShadowColor(0, 0, 0, textColor[1] > .5 and .9 or 0)
     self.label:SetTextColor(textColor[1], textColor[2], textColor[3])
   end
   b.ApplyAccent = applyAccent
@@ -60,21 +61,21 @@ function UI.Button(parent, text, style, onClick)
   return b
 end
 
----The red close button with a gold cross.
+---The close button: a quiet cross that turns red under the mouse.
 function UI.CloseButton(parent, onClick)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(22, 22)
-  b.box = UI.Box(b, "BACKGROUND", 0)
-  b.box:Set(C.redBorder, C.redTop, C.redBottom)
-  b.icon = UI.Icon(b, "close", 12, C.gold)
+  b.box = UI.SoftBox(b, "BACKGROUND", 0, 5)
+  b.box:Set(nil, { 1, 1, 1, .06 })
+  b.icon = UI.Icon(b, "close", 12, C.muted)
   b.icon:SetPoint("CENTER")
   b:SetScript("OnEnter", function(self)
-    self.box:Set(C.redBorder, UI.Mix(C.redTop, WHITE, .15), C.redBottom)
-    self.icon:SetVertexColor(1, .95, .7)
+    self.box:Set(nil, C.redTop)
+    self.icon:SetVertexColor(1, 1, 1)
   end)
   b:SetScript("OnLeave", function(self)
-    self.box:Set(C.redBorder, C.redTop, C.redBottom)
-    self.icon:SetVertexColor(C.gold[1], C.gold[2], C.gold[3])
+    self.box:Set(nil, { 1, 1, 1, .06 })
+    self.icon:SetVertexColor(C.muted[1], C.muted[2], C.muted[3])
   end)
   b:SetScript("OnClick", onClick)
   return b
@@ -89,7 +90,7 @@ end
 function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   local f = CreateFrame("Frame", nil, parent)
   f:SetHeight(28)
-  f.box = UI.Box(f, "BACKGROUND", 0)
+  f.box = UI.SoftBox(f, "BACKGROUND", 0, 5)
   f.icon = UI.Icon(f, "search", 14, C.muted)
   f.icon:SetPoint("LEFT", 9, 0)
   f.icon:SetAlpha(.8)
@@ -132,7 +133,7 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   end
 
   function f:Paint()
-    self.box:Set(self.focused and self.accent or C.lineStrong, C.inset)
+    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
   end
   f.ApplyAccent = applyAccent
   function f:GetText() return edit:GetText() end
@@ -224,9 +225,10 @@ function UI.Toggle(parent, onChange)
     self.knob:ClearAllPoints()
     if self.on then
       self.border:SetColor(self.accent)
-      self.fill:SetColor(UI.Mix({ .106, .086, .063 }, self.accent, .45))
+      self.fill:SetColor(UI.Mix({ .106, .086, .063 }, self.accent, .82))
       self.knob:SetPoint("LEFT", 19, 0)
-      self.knob:SetVertexColor(1, 1, 1)
+      local knob = UI.OnColor(self.accent)
+      self.knob:SetVertexColor(knob[1], knob[2], knob[3])
     else
       self.border:SetColor(C.lineStrong)
       self.fill:SetColor(C.track)
@@ -264,6 +266,8 @@ function UI.Tabs(parent, items, onSelect)
     t.label:SetText(item.label)
     t.count = UI.Text(t, "body", 12, C.faint)
     t.count:SetPoint("LEFT", t.label, "RIGHT", 4, 0)
+    t.wash = tex(t, "BACKGROUND", 0)       -- the selected tab's glow, rising from its line
+    t.wash:SetAllPoints()
     t.line = tex(t, "ARTWORK", 1)
     t.line:SetHeight(2)
     t.line:SetPoint("BOTTOMLEFT", 4, 0)
@@ -289,12 +293,15 @@ function UI.Tabs(parent, items, onSelect)
   end
 
   function bar:Paint()
+    local selected = UI.Readable(self.accent)
     for _, t in ipairs(self.tabs) do
       local on = t.key == self.selected
-      local c = on and C.gold or (t.hover and C.text or C.muted)
+      local c = on and selected or (t.hover and C.text or C.muted)
       t.label:SetTextColor(c[1], c[2], c[3])
       t.line:SetColorTexture(self.accent[1], self.accent[2], self.accent[3], 1)
       t.line:SetShown(on)
+      UI.Gradient(t.wash, self.accent, self.accent, 0, .18)
+      t.wash:SetShown(on)
     end
   end
   bar.ApplyAccent = applyAccent
@@ -407,7 +414,7 @@ function UI.Segmented(parent, items, onSelect, height)
     local a = self.accent
     for _, b in ipairs(self.buttons) do
       local on = b.key == self.selected
-      local alpha = on and .3 or 0
+      local alpha = on and .42 or 0
       for _, t in ipairs(b.hl) do
         if t == b.mid then
           t:SetColorTexture(a[1], a[2], a[3], alpha)

@@ -2,6 +2,12 @@
 
 Earlier versions are in the git history.
 
+## 1.31.0 (2026-11-23)
+
+- **A cleaner window.** The gold frame and the two round studs are gone. Every window is now a rounded panel with a soft shadow and no border.
+- **Each add-on's colour shows more.** It washes over the top of its window and faintly tints the rest, and it colours the selected tab, the headings, switches, the fields you point at or type in, and the main buttons (they were red and gold). The close button is a quiet cross that turns red when you point at it.
+- For add-ons: `UI.SoftBox`, `UI.Wash`, `UI.Shadow`, `UI.Readable(colour)`, `UI.OnColor(colour)`, and an outset for `UI.Round`.
+
 ## 1.30.0 (2026-11-18)
 
 - **Shorter item tooltips.** `Core.Tooltip`: each add-on adds one line to an item's tooltip, and the rest shows while Shift is held. `Core.Tooltip.Detail()` says whether Shift is down, and `Core.Tooltip.Head(tt, text, colour, more)` adds a heading with a faint "Shift: more" on the right, once per tooltip. Pressing or releasing Shift redraws an item tooltip. Clairvoyance, Dimension, Fortune and Retrospect use it.

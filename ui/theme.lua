@@ -75,7 +75,17 @@ end
 ---An add-on's accent for text (1.20): the accent itself, lightened just enough to read on the window's stone when it is
 ---too dark for small text (Bulwark's blue). Use UI.Accent for marks, bars and fills.
 function UI.AccentText(key)
-  local c = UI.Accent(key)
+  return UI.Readable(UI.Accent(key))
+end
+
+---White or near-black, whichever reads better on a colour (1.31): the label of a filled accent button.
+function UI.OnColor(c)
+  local dark, light = { .06, .05, .04, 1 }, { 1, 1, 1, 1 }
+  return UI.Contrast(c, dark) >= UI.Contrast(c, light) and dark or light
+end
+
+---A colour lightened just enough to read as small text on the window's stone (1.31).
+function UI.Readable(c)
   local t = 0
   local out = c
   while UI.Contrast(out, UI.C.stone) < 4.5 and t < 1 do

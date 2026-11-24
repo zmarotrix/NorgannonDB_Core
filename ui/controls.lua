@@ -97,8 +97,11 @@ end
 function UI.Dropdown(parent, options, onChange)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(160, 24)
-  b.box = UI.Box(b, "BACKGROUND", 0)
-  b.box:Set(C.lineStrong, C.inset)
+  b.box = UI.SoftBox(b, "BACKGROUND", 0, 5)
+  function b:Paint()
+    self.box:Set(self.hover and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
+  end
+  b.ApplyAccent = UI.ApplyAccent
   b.label = UI.Text(b, "body", 13, C.text)
   b.label:SetPoint("LEFT", 9, 0)
   b.label:SetPoint("RIGHT", -24, 0)
@@ -115,8 +118,8 @@ function UI.Dropdown(parent, options, onChange)
     self.label:SetText(labelOf(v))
     if changed and not silent and onChange then onChange(v) end
   end
-  b:SetScript("OnEnter", function(self) self.box:Set(C.quietBorder, C.inset) end)
-  b:SetScript("OnLeave", function(self) self.box:Set(C.lineStrong, C.inset) end)
+  UI.RepaintOnHover(b)
+  UI.AttachAccent(b)
   b:SetScript("OnClick", function(self)
     if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
     MenuUtil.CreateContextMenu(self, function(_, root)
@@ -194,6 +197,14 @@ function UI.SettingsList(parent)
   function list:Header(text)
     local h = UI.Text(self.content, "title", 16, C.goldSoft)
     h:SetText(text)
+    -- a heading in the window's accent (gold on the game's own Settings pages, which have none)
+    if UI.WindowOf(self.content) then
+      function h:ApplyAccent(c)
+        local t = UI.Readable(c)
+        self:SetTextColor(t[1], t[2], t[3])
+      end
+      UI.AttachAccent(h)
+    end
     place(h, 18, 6)
     return h
   end

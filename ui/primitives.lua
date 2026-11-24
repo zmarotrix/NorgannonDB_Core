@@ -90,9 +90,11 @@ local function setPiecesColor(self, c, alpha)
   for _, piece in ipairs(self.pieces) do piece:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
 end
 
----A rounded rectangle filling frame: UI.Round(frame, layer, sub, radius[, "line"]).
----:SetColor(c, alpha). "line" draws the outline texture instead of the fill.
-function UI.Round(frame, layer, sub, radius, style)
+---A rounded rectangle filling frame: UI.Round(frame, layer, sub, radius[, "line"][, outset]).
+---:SetColor(c, alpha). "line" draws the outline texture instead of the fill. outset (1.31) reaches that many pixels
+---past the frame's edges (a shadow).
+function UI.Round(frame, layer, sub, radius, style, outset)
+  local o = outset or 0
   local file = style == "line" and TEX.roundLine or TEX.round
   local r = radius or 6
   local p = {}
@@ -108,10 +110,10 @@ function UI.Round(frame, layer, sub, radius, style)
   local tl, tr = piece(0, m, 0, m), piece(1 - m, 1, 0, m)
   local bl, br = piece(0, m, 1 - m, 1), piece(1 - m, 1, 1 - m, 1)
   for _, corner in ipairs({ tl, tr, bl, br }) do corner:SetSize(r, r) end
-  tl:SetPoint("TOPLEFT")
-  tr:SetPoint("TOPRIGHT")
-  bl:SetPoint("BOTTOMLEFT")
-  br:SetPoint("BOTTOMRIGHT")
+  tl:SetPoint("TOPLEFT", -o, o)
+  tr:SetPoint("TOPRIGHT", o, o)
+  bl:SetPoint("BOTTOMLEFT", -o, -o)
+  br:SetPoint("BOTTOMRIGHT", o, -o)
   local top, bottom = piece(m, 1 - m, 0, m), piece(m, 1 - m, 1 - m, 1)
   top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
   top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
@@ -128,6 +130,54 @@ function UI.Round(frame, layer, sub, radius, style)
   local box = { pieces = p, SetColor = setPiecesColor }
   function box:SetShown(on) for _, tx in ipairs(self.pieces) do tx:SetShown(on) end end
   return box
+end
+
+---A rounded box with the same :Set(border, fill) as UI.Box (1.31): a flat fill, and an outline unless border is nil.
+function UI.SoftBox(frame, layer, sub, radius)
+  local box = { fill = UI.Round(frame, layer, sub or 0, radius or 5), line = UI.Round(frame, layer, (sub or 0) + 1, radius or 5, "line") }
+  function box:Set(border, fill)
+    self.fill:SetColor(fill)
+    self.line:SetShown(border ~= nil)
+    if border then self.line:SetColor(border) end
+  end
+  return box
+end
+
+---The colour at the top of a rounded panel, fading out downwards (1.31): the accent wash of a window or a card.
+---:SetColor(c, alpha). radius is the panel's, so the wash keeps to its round corners.
+function UI.Wash(frame, layer, sub, radius, height)
+  local r = radius
+  local function corner(left, right)
+    local t = frame:CreateTexture(nil, layer, nil, sub)
+    t:SetTexture(TEX.round)
+    t:SetTexCoord(left, right, 0, CORNER)
+    t:SetSize(r, r)
+    return t
+  end
+  local tl, tr = corner(0, CORNER), corner(1 - CORNER, 1)
+  tl:SetPoint("TOPLEFT")
+  tr:SetPoint("TOPRIGHT")
+  local strip, fade = tex(frame, layer, sub), tex(frame, layer, sub)
+  strip:SetPoint("TOPLEFT", tl, "TOPRIGHT")
+  strip:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+  fade:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
+  fade:SetPoint("TOPRIGHT", tr, "BOTTOMRIGHT")
+  fade:SetHeight(height)
+  local wash = {}
+  function wash:SetColor(c, alpha)
+    tl:SetVertexColor(c[1], c[2], c[3], alpha)
+    tr:SetVertexColor(c[1], c[2], c[3], alpha)
+    strip:SetColorTexture(c[1], c[2], c[3], alpha)
+    gradient(fade, c, c, alpha, 0)
+  end
+  return wash
+end
+
+---A soft shadow around a rounded panel (1.31), on the frame itself.
+function UI.Shadow(frame, sub, radius)
+  for i, ring in ipairs({ { 8, .1 }, { 5, .16 }, { 2, .26 } }) do
+    UI.Round(frame, "BACKGROUND", sub + i - 1, radius + ring[1], nil, ring[1]):SetColor(C.black, ring[2])
+  end
 end
 
 ---The left edge of a rounded box, `width` wide, following its curve (a colour stripe on a card).
