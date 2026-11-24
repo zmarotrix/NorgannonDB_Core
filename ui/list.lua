@@ -33,15 +33,15 @@ function UI.List(parent, opts)
   f.accent = C.goldSoft
 
   -- scrollbar
-  f.track = UI.Tex(f, "ARTWORK", 0, { 1, 1, 1, .04 })
+  f.track = CreateFrame("Frame", nil, f)
   f.track:SetPoint("TOPRIGHT", -1, -TRACK_INSET)
   f.track:SetPoint("BOTTOMRIGHT", -1, TRACK_INSET)
   f.track:SetWidth(SCROLLBAR)
+  UI.VPill(f.track, SCROLLBAR, "BACKGROUND"):SetColor({ 1, 1, 1 }, .05)
   f.thumb = CreateFrame("Frame", nil, f)
   f.thumb:SetWidth(SCROLLBAR)
   f.thumb:EnableMouse(true)
-  f.thumb.tex = UI.Tex(f.thumb, "ARTWORK", 1)
-  f.thumb.tex:SetAllPoints()
+  f.thumb.tex = UI.VPill(f.thumb, SCROLLBAR, "ARTWORK", 1)
 
   local function contentHeight() return #f.items * f.rowHeight end
   local function maxOffset() return math.max(0, contentHeight() - (f:GetHeight() or 0)) end
@@ -113,9 +113,12 @@ function UI.List(parent, opts)
   local function drawRow(row, item, index)
     row.item, row.index = item, index
     local a = f.accent
-    UI.GradientH(row.hl, a, .14)
-    UI.GradientH(row.sel, a, .26)
-    row.bar:SetColorTexture(a[1], a[2], a[3], 1)
+    if row.painted ~= a then         -- only when the accent changes: this runs for every row on every scroll
+      row.painted = a
+      UI.GradientH(row.hl, a, .14)
+      UI.GradientH(row.sel, a, .28)
+      row.bar:SetColorTexture(a[1], a[2], a[3], 1)
+    end
     if row.band then
       row.band:SetShown(item.group ~= nil)
       row.rule:SetShown(item.group ~= nil)
@@ -145,8 +148,11 @@ function UI.List(parent, opts)
     f.thumb:SetHeight(thumbH)
     f.thumb:ClearAllPoints()
     f.thumb:SetPoint("TOPRIGHT", -1, -TRACK_INSET - (trackH - thumbH) * ratio)
-    local c = f.thumbHover and f.accent or C.lineStrong
-    f.thumb.tex:SetColorTexture(c[1], c[2], c[3], 1)
+    local c = f.thumbHover and f.accent or f.thumbIdle or C.lineStrong
+    if c ~= f.thumb.color then
+      f.thumb.color = c
+      f.thumb.tex:SetColor(c, 1)
+    end
   end
 
   function f:Refresh()
@@ -213,6 +219,7 @@ function UI.List(parent, opts)
 
   function f:ApplyAccent(c)
     self.accent = c
+    self.thumbIdle = UI.Mix(C.lineStrong, c, .25)
     self:Refresh()
   end
 
@@ -250,6 +257,7 @@ function UI.List(parent, opts)
   if window then
     table.insert(window._accentWidgets, f)
     f.accent = window.accent or C.goldSoft
+    f.thumbIdle = UI.Mix(C.lineStrong, f.accent, .25)
   end
   return f
 end

@@ -61,14 +61,20 @@ function UI.Bar(parent, kind, height)
   f.fillFrame:SetPoint("TOPLEFT")
   f.fillFrame:SetHeight(h)
   f.fill = pill(f.fillFrame, h, "ARTWORK", 0)
+  -- the light along its top
+  f.shine = f.fillFrame:CreateTexture(nil, "ARTWORK", nil, 1)
+  f.shine:SetColorTexture(1, 1, 1, .22)
+  f.shine:SetHeight(math.max(1, math.floor(h * .35)))
+  f.shine:SetPoint("TOPLEFT", h / 2, 0)
+  f.shine:SetPoint("TOPRIGHT", -h / 2, 0)
   -- the dividing lines and the party marker: on a frame above the fill (a child frame draws over
   -- its parent's textures whatever their layer)
   f.over = CreateFrame("Frame", nil, f)
   f.over:SetAllPoints()
   f.over:SetFrameLevel(f.fillFrame:GetFrameLevel() + 1)
   f.ticks = {}
-  f.marker = f.over:CreateTexture(nil, "OVERLAY", nil, 2)
-  f.marker:SetTexture(TEX.circle)
+  f.marker = UI.Smooth(f.over:CreateTexture(nil, "OVERLAY", nil, 2))
+  f.marker:SetTexture(h <= 7 and TEX.disc16 or TEX.dot)
   f.marker:SetSize(h + 3, h + 3)
   f.marker:Hide()
   f.kind = kind

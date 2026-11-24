@@ -12,6 +12,11 @@ local RADIUS = 10   -- the window's round corners
 function UI.Card(parent, title)
   local f = CreateFrame("Frame", nil, parent)
   f.box = UI.SoftBox(f, "BACKGROUND", 0, 6)
+  f.gleam = UI.Tex(f, "BACKGROUND", 3)                  -- its top edge catches the light
+  f.gleam:SetHeight(1)
+  f.gleam:SetPoint("TOPLEFT", 6, 0)
+  f.gleam:SetPoint("TOPRIGHT", -6, 0)
+  f.gleam:SetColorTexture(1, 1, 1, .07)
   f.title = UI.Text(f, "title", 15, C.gold)
   -- a raised panel tinted with the window's accent, its title in it
   function f:ApplyAccent(c)
@@ -165,6 +170,16 @@ function UI.Window(opts)
   end
   function f:SetSub(text) self.sub:SetText(text or "") end
   function f:SetTitle(text) self.title:SetText(text or "") end
+
+  -- it fades in: the client's own animation, so nothing runs each frame here
+  local fade = f.CreateAnimationGroup and f:CreateAnimationGroup()
+  local step = fade and fade.CreateAnimation and fade:CreateAnimation("Alpha")
+  if step then
+    step:SetFromAlpha(0)
+    step:SetToAlpha(1)
+    step:SetDuration(.12)
+    f:HookScript("OnShow", function() fade:Play() end)
+  end
 
   if opts.name then
     table.insert(UISpecialFrames, opts.name)

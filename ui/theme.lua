@@ -21,7 +21,10 @@ UI.TEX = {
   -- the controls' art (tools/brand/build_controls.py), each twice its size on screen
   switchWell = MEDIA .. "ui\\switch-well", switchFill = MEDIA .. "ui\\switch-fill", switchGlow = MEDIA .. "ui\\switch-glow",
   knob = MEDIA .. "ui\\knob", dot = MEDIA .. "ui\\dot", field = MEDIA .. "ui\\field", line = MEDIA .. "ui\\line",
-  halo = MEDIA .. "ui\\halo", fill = MEDIA .. "ui\\fill", drop = MEDIA .. "ui\\drop", gloss = MEDIA .. "ui\\gloss",
+  halo = MEDIA .. "ui\\halo", fill = MEDIA .. "ui\\fill", face = MEDIA .. "ui\\face",
+  pillFill = MEDIA .. "ui\\pill-fill", pillFace = MEDIA .. "ui\\pill-face", pillWell = MEDIA .. "ui\\pill-well",
+  pillLine = MEDIA .. "ui\\pill-line", well = MEDIA .. "ui\\well", disc16 = MEDIA .. "ui\\disc16", disc8 = MEDIA .. "ui\\disc8",
+  tabGlow = MEDIA .. "ui\\tab-glow", tabLine = MEDIA .. "ui\\tab-line",
   sheen = MEDIA .. "ui\\sheen", shadow = MEDIA .. "ui\\shadow", star = MEDIA .. "ui\\star",
   sword = MEDIA .. "ui\\sword", bag = MEDIA .. "ui\\bag",
 }

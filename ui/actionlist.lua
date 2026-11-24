@@ -124,7 +124,7 @@ end
 function UI.Input(parent, opts)
   opts = opts or {}
   local holder = CreateFrame("Frame", nil, parent)
-  holder.box = UI.Field(holder, "BACKGROUND", 0)
+  holder.box = UI.Field(holder, "BACKGROUND", 0, opts.multiline)
   function holder:Paint()
     self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), self.focused)
   end

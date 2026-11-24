@@ -352,8 +352,11 @@ local function buildFlyout()
   f:SetClampedToScreen(true)
   f:EnableMouse(true)
   f:Hide()
-  f.box = UI.Box(f, "BACKGROUND", 0)
-  f.box:Set(C.lineStrong, C.stone2, C.stone)
+  -- as the suite's windows
+  UI.Shadow(f, -8)
+  UI.Round(f, "BACKGROUND", -4, 10):SetColor(UI.Mix(C.stone, C.goldSoft, .05))
+  UI.Wash(f, "BACKGROUND", -3, 10, 60):SetColor(C.goldSoft, .12)
+  UI.Sheen(f, "BACKGROUND", -2)
   f.rows = {}
   table.insert(UISpecialFrames, "NorgannonMinimapFlyout")   -- Escape closes it
   -- a click anywhere else closes it (the Norgannon button's own click toggles it)

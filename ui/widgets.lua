@@ -4,7 +4,6 @@
 local Core = NorgannonCore
 local UI = Core.UI
 local C, TEX = UI.C, UI.TEX
-local tex, pill = UI.Tex, UI.Pill
 local attachAccent, applyAccent, repaintOnHover = UI.AttachAccent, UI.ApplyAccent, UI.RepaintOnHover
 
 local WHITE = { 1, 1, 1 }
@@ -135,8 +134,8 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
     f.hint.text:SetText(hint)
     f.hint:SetSize(math.floor(f.hint.text:GetStringWidth() + 10), 16)
     f.hint:SetPoint("RIGHT", -6, 0)
-    f.hint.box = UI.Box(f.hint, "BACKGROUND", 0)
-    f.hint.box:Set(C.line, C.inset)
+    f.hint.box = UI.SoftBox(f.hint, "BACKGROUND", 3, 4)
+    f.hint.box:Set(nil, { 1, 1, 1, .05 })
     edit:SetPoint("RIGHT", f.hint, "LEFT", -6, 0)
   end
 
@@ -184,8 +183,9 @@ end
 function UI.Chip(parent, text, dot, onToggle)
   local b = CreateFrame("Button", nil, parent)
   b:SetHeight(20)
-  b.border = pill(b, 20, "BACKGROUND", 0)
-  b.fill = pill(b, 20, "BACKGROUND", 1, 1)
+  b.well = UI.Band(b, "BACKGROUND", 0, "pillWell", true)
+  b.line = UI.Band(b, "BACKGROUND", 1, "pillLine", true)
+  b.face = UI.Face(b, "BACKGROUND", 0, true)
   b.label = UI.Text(b, "body", 13, C.muted)
   if dot then
     b.dot = UI.Icon(b, "circle", 8, dot)
@@ -199,13 +199,15 @@ function UI.Chip(parent, text, dot, onToggle)
   b.on = false
 
   function b:Paint()
+    -- on: raised, in a deep accent; off: an empty recess
+    self.face:SetShown(self.on)
+    self.well:SetShown(not self.on)
+    self.line:SetShown(not self.on)
     if self.on then
-      self.border:SetColor(UI.Mix(C.line, self.accent, .7))
-      self.fill:SetColor(UI.Mix(C.inset, self.accent, self.hover and .22 or .14))
-      self.label:SetTextColor(C.text[1], C.text[2], C.text[3])
+      self.face:Set(UI.Mix({ .106, .078, .063 }, self.accent, self.hover and .5 or .38))
+      self.label:SetTextColor(1, 1, 1)
     else
-      self.border:SetColor(self.hover and UI.Mix(C.lineStrong, self.accent, .5) or C.lineStrong)
-      self.fill:SetColor(C.inset)
+      self.line:SetColor(UI.Mix(C.line, self.accent, self.hover and .6 or .2))
       self.label:SetTextColor(C.muted[1], C.muted[2], C.muted[3])
     end
   end
@@ -313,12 +315,14 @@ function UI.Tabs(parent, items, onSelect)
     t.label:SetText(item.label)
     t.count = UI.Text(t, "body", 12, C.faint)
     t.count:SetPoint("LEFT", t.label, "RIGHT", 4, 0)
-    t.wash = tex(t, "BACKGROUND", 0)       -- the selected tab's glow, rising from its line
+    t.wash = t:CreateTexture(nil, "BACKGROUND")       -- the selected tab's light, rising from its line
+    t.wash:SetTexture(TEX.tabGlow)
     t.wash:SetAllPoints()
-    t.line = tex(t, "ARTWORK", 1)
+    t.line = t:CreateTexture(nil, "ARTWORK", nil, 1)
+    t.line:SetTexture(TEX.tabLine)
     t.line:SetHeight(2)
-    t.line:SetPoint("BOTTOMLEFT", 4, 0)
-    t.line:SetPoint("BOTTOMRIGHT", -4, 0)
+    t.line:SetPoint("BOTTOMLEFT", 0, 0)
+    t.line:SetPoint("BOTTOMRIGHT", 0, 0)
     t:SetPoint("BOTTOMLEFT", previous or bar, previous and "BOTTOMRIGHT" or "BOTTOMLEFT", previous and 2 or 0, 0)
     t:SetScript("OnClick", function(self) bar:Select(self.key) end)
     t:SetScript("OnEnter", function(self)
@@ -345,10 +349,11 @@ function UI.Tabs(parent, items, onSelect)
       local on = t.key == self.selected
       local c = on and selected or (t.hover and C.text or C.muted)
       t.label:SetTextColor(c[1], c[2], c[3])
-      t.line:SetColorTexture(self.accent[1], self.accent[2], self.accent[3], 1)
-      t.line:SetShown(on)
-      UI.Gradient(t.wash, self.accent, self.accent, 0, .18)
-      t.wash:SetShown(on)
+      -- the mouse gets a fainter light
+      t.line:SetVertexColor(self.accent[1], self.accent[2], self.accent[3], on and 1 or .35)
+      t.line:SetShown(on or t.hover or false)
+      t.wash:SetVertexColor(self.accent[1], self.accent[2], self.accent[3], on and .34 or .12)
+      t.wash:SetShown(on or t.hover or false)
     end
   end
   bar.ApplyAccent = applyAccent
@@ -373,36 +378,14 @@ function UI.Tabs(parent, items, onSelect)
 end
 
 -------------------------------------------------------------------------------------------
--- Segmented control: a pill of options, one selected. The selection fills the pill's rounded
--- ends exactly (end segments get rounded highlight caps).
+-- Segmented control: a recessed pill of options with one raised key, which slides to the one selected
 -------------------------------------------------------------------------------------------
 
--- The highlight behind a segment: rounded on the pill's outer ends, square between segments.
--- b.hl holds every part; b.mid is the middle (a solid colour, where the caps are tinted textures).
-local function addSegmentHighlight(b, inner, first, last)
-  b.hl = {}
-  local function cap(texLeft, texRight)
-    local t = UI.Smooth(b:CreateTexture(nil, "ARTWORK"))
-    t:SetTexture(TEX.dot)
-    t:SetTexCoord(texLeft, texRight, 0, 1)
-    t:SetSize(inner / 2, inner)
-    b.hl[#b.hl + 1] = t
-    return t
-  end
-  local leftCap = first and cap(0, .5)
-  local rightCap = last and cap(.5, 1)
-  if leftCap then leftCap:SetPoint("LEFT") end
-  if rightCap then rightCap:SetPoint("RIGHT") end
-  local mid = b:CreateTexture(nil, "ARTWORK")
-  mid:SetColorTexture(1, 1, 1, 1)
-  mid:SetPoint("TOPLEFT", leftCap or b, leftCap and "TOPRIGHT" or "TOPLEFT")
-  mid:SetPoint("BOTTOMRIGHT", rightCap or b, rightCap and "BOTTOMLEFT" or "BOTTOMRIGHT")
-  b.mid = mid
-  b.hl[#b.hl + 1] = mid
-end
+local KEY_INSET = 2   -- the key's gap to the pill's edge
 
-local function newSegment(seg, item, inner, first, last)
+local function newSegment(seg, item, inner)
   local b = CreateFrame("Button", nil, seg)
+  b:SetFrameLevel(seg.thumb:GetFrameLevel() + 1)   -- its words over the key
   b.key, b.tip = item.key, item.tip
   if item.icon then
     b.icon = UI.Icon(b, item.icon, inner - 5, C.muted, "OVERLAY")
@@ -415,7 +398,6 @@ local function newSegment(seg, item, inner, first, last)
     b.text:SetText(item.label)
     b:SetSize(math.floor(b.text:GetStringWidth() + 16), inner)
   end
-  addSegmentHighlight(b, inner, first, last)
   b:SetScript("OnClick", function(self) seg:Select(self.key) end)
   b:SetScript("OnEnter", function(self)
     self.hover = true
@@ -442,45 +424,75 @@ function UI.Segmented(parent, items, onSelect, height)
   local inner = h - 2
   local seg = CreateFrame("Frame", nil, parent)
   seg:SetHeight(h)
-  seg.border = pill(seg, h, "BACKGROUND", 0)
-  seg.border:SetColor(C.lineStrong)
-  seg.fill = pill(seg, h, "BACKGROUND", 1, 1)
-  seg.fill:SetColor({ 0, 0, 0, .55 })
+  seg.well = UI.Band(seg, "BACKGROUND", 0, "pillWell", true)
+  seg.line = UI.Band(seg, "BACKGROUND", 1, "pillLine", true)
+  seg.thumb = CreateFrame("Frame", nil, seg)
+  seg.thumb:SetHeight(h - KEY_INSET * 2)
+  seg.thumb.face = UI.Face(seg.thumb, "BACKGROUND", 0, true)
+  seg.thumb:Hide()
   seg.buttons = {}
-  local x = 1
+  local x = KEY_INSET
   for i, item in ipairs(items) do
-    local b = newSegment(seg, item, inner, i == 1, i == #items)
+    local b = newSegment(seg, item, inner)
     b:SetPoint("LEFT", seg, "LEFT", x, 0)
-    x = x + b:GetWidth()
+    b.x, b.w = x, b:GetWidth()
+    x = x + b.w
     seg.buttons[i] = b
   end
-  seg:SetWidth(x + 1)
+  seg:SetWidth(x + KEY_INSET)
   seg.accent = C.goldSoft
 
+  local function moveKey(left, width)
+    seg.keyX, seg.keyW = left, width
+    seg.thumb:SetPoint("LEFT", seg, "LEFT", left, 0)
+    seg.thumb:SetWidth(width)
+  end
+  local function slide(self, elapsed)
+    self.time = self.time + elapsed
+    local t = math.min(1, self.time / SLIDE)
+    local eased = 1 - (1 - t) ^ 3
+    moveKey(self.fromX + (self.target.x - self.fromX) * eased, self.fromW + (self.target.w - self.fromW) * eased)
+    if t >= 1 then self:SetScript("OnUpdate", nil) end
+  end
+  local function settle()
+    seg:SetScript("OnUpdate", nil)
+    if seg.target then moveKey(seg.target.x, seg.target.w) end
+  end
+
   function seg:Paint()
-    local a = self.accent
+    local fill = UI.Mix({ .1, .08, .06 }, self.accent, .8)
+    local on = UI.OnColor(fill)
+    self.thumb.face:Set(fill)
+    self.line:SetColor(UI.Mix(C.line, self.accent, .22))
     for _, b in ipairs(self.buttons) do
-      local on = b.key == self.selected
-      local alpha = on and .42 or 0
-      for _, t in ipairs(b.hl) do
-        if t == b.mid then
-          t:SetColorTexture(a[1], a[2], a[3], alpha)
-        else
-          t:SetVertexColor(a[1], a[2], a[3], alpha)
-        end
+      local selected = b.key == self.selected
+      local tc = selected and on or (b.hover and C.text or C.muted)
+      if b.text then
+        b.text:SetTextColor(tc[1], tc[2], tc[3])
+        b.text:SetShadowColor(0, 0, 0, tc[1] > .5 and .9 or 0)
       end
-      local tc = on and WHITE or (b.hover and C.text or C.muted)
-      if b.text then b.text:SetTextColor(tc[1], tc[2], tc[3]) end
       if b.icon then b.icon:SetVertexColor(tc[1], tc[2], tc[3]) end
     end
   end
   seg.ApplyAccent = applyAccent
+  ---silent (or out of sight) the key is simply there
   function seg:Select(key, silent)
-    self.selected = key
+    local target
+    for _, b in ipairs(self.buttons) do if b.key == key then target = b end end
+    local slides = not silent and target and self.target and target ~= self.target and self:IsVisible()
+    self.selected, self.target = key, target
+    self.thumb:SetShown(target ~= nil)
+    if slides then
+      self.fromX, self.fromW, self.time = self.keyX, self.keyW, 0
+      self:SetScript("OnUpdate", slide)
+    else
+      settle()
+    end
     self:Paint()
     if not silent and onSelect then onSelect(key) end
   end
   function seg:GetSelected() return self.selected end
+  seg:SetScript("OnHide", settle)
   attachAccent(seg)
   return seg
 end

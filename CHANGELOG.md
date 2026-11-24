@@ -2,6 +2,17 @@
 
 Earlier versions are in the git history.
 
+## 1.33.0 (2026-11-23)
+
+- **Selectors** are a recessed pill with a raised key in the add-on's colour that slides to what you pick. The seam at the end of the selected part is gone.
+- **Dropdowns** open a panel in the suite's own look, instead of the game's menu.
+- **Tabs** are lit from below, with a line that fades at its ends, and light up faintly under the mouse.
+- **Filter chips** are raised when on and an empty recess when off. Progress bars have a light along the top and clean round ends.
+- **Panes** around lists are recessed with round corners, tinted with the add-on's colour. Scrollbars are round, and settings pages have one when there is more than fits.
+- Windows fade in. The Norgannon button's list matches the suite's windows.
+- **Lighter too.** A button or text box is 6 textures instead of 27, and lists no longer recolour every row each time they scroll.
+- For add-ons: `UI.Band`, `UI.Well`, `UI.VPill`.
+
 ## 1.32.0 (2026-11-23)
 
 - **Controls with some depth.** Switches have a recessed track that fills with the add-on's colour, a lit knob that slides across, a soft glow and the game's checkbox click. Text boxes and dropdowns are recessed and glow when you use them, buttons are raised and sink when pressed, and sliders share the switch's knob.

@@ -92,8 +92,87 @@ function UI.Slider(parent, min, max, step, onChange)
 end
 
 -------------------------------------------------------------------------------------------
--- Dropdown (the game's context menu with radio entries)
+-- Dropdown (its options open in the suite's own panel)
 -------------------------------------------------------------------------------------------
+
+-- The options of a dropdown (1.33): one panel for them all, in the add-on's accent, as wide as its dropdown.
+local OPTION_H, MAX_OPTIONS = 24, 12
+local popup
+
+local function buildOptions()
+  local f = CreateFrame("Frame", "NorgannonCoreOptions", UIParent)
+  f:SetFrameStrata("FULLSCREEN_DIALOG")
+  f:SetClampedToScreen(true)
+  f:EnableMouse(true)
+  f:Hide()
+  UI.Shadow(f, -8)
+  f.bg = UI.Round(f, "BACKGROUND", -4, 6)
+  f.line = UI.Round(f, "BACKGROUND", -3, 6, "line")
+  f.list = UI.List(f, {
+    rowHeight = OPTION_H,
+    createRow = function(row, content)
+      row.check = UI.Icon(content, "check", 11)
+      row.check:SetPoint("LEFT", 7, 0)
+      row.text = UI.Text(content, "body", 13, C.text)
+      row.text:SetPoint("LEFT", 24, 0)
+      row.text:SetPoint("RIGHT", -8, 0)
+      row.text:SetWordWrap(false)
+    end,
+    updateRow = function(row, item)
+      local on, a = item.value == f.owner.value, f.list.accent
+      row.check:SetShown(on)
+      row.check:SetVertexColor(a[1], a[2], a[3])
+      row.text:SetText(item.text)
+      local c = on and UI.Readable(a) or C.text
+      row.text:SetTextColor(c[1], c[2], c[3])
+    end,
+    onClick = function(item)
+      local owner = f.owner
+      f:Hide()
+      owner:SetValue(item.value)
+    end,
+  })
+  f.list:SetPoint("TOPLEFT", 4, -4)
+  f.list:SetPoint("TOPRIGHT", -4, -4)
+  table.insert(UISpecialFrames, "NorgannonCoreOptions")   -- Escape closes it
+  -- a click anywhere else closes it (the dropdown's own click toggles it)
+  pcall(f.RegisterEvent, f, "GLOBAL_MOUSE_DOWN")
+  f:SetScript("OnEvent", function(self)
+    if self:IsShown() and not self:IsMouseOver() and not self.owner:IsMouseOver() then self:Hide() end
+  end)
+  -- and so does its dropdown going away
+  f:SetScript("OnUpdate", function(self) if not self.owner:IsVisible() then self:Hide() end end)
+  return f
+end
+
+local function toggleOptions(owner)
+  popup = popup or buildOptions()
+  if popup:IsShown() then
+    local was = popup.owner
+    popup:Hide()
+    if was == owner then return end
+  end
+  local f = popup
+  f.owner = owner
+  local a = owner.accent or C.goldSoft
+  f.bg:SetColor(UI.Mix(C.stone2, a, .06))
+  f.line:SetColor(UI.Mix(C.line, a, .35))
+  local items, width = {}, owner:GetWidth() or 160
+  for i, o in ipairs(owner.options) do
+    items[i] = { value = o[1], text = o[2] }
+  end
+  f:SetScale(owner:GetEffectiveScale() / UIParent:GetEffectiveScale())   -- as big as the window it belongs to
+  local h = math.min(#items, MAX_OPTIONS) * OPTION_H
+  f:SetSize(width, h + 8)
+  f.list:SetHeight(h)
+  f:ClearAllPoints()
+  f:SetPoint("TOPRIGHT", owner, "BOTTOMRIGHT", 0, -3)
+  f.list:ApplyAccent(a)
+  f:Show()
+  f.list:SetData(items)
+  for i, item in ipairs(items) do if item.value == owner.value then f.list:ScrollToIndex(i) end end
+end
+UI.ToggleOptions = toggleOptions
 
 ---UI.Dropdown(parent, { {value, label}, ... }, onChange). :SetValue(v, silent), .value.
 function UI.Dropdown(parent, options, onChange)
@@ -123,12 +202,7 @@ function UI.Dropdown(parent, options, onChange)
   UI.RepaintOnHover(b)
   UI.AttachAccent(b)
   b:SetScript("OnClick", function(self)
-    if not (MenuUtil and MenuUtil.CreateContextMenu) then return end
-    MenuUtil.CreateContextMenu(self, function(_, root)
-      for _, o in ipairs(self.options) do
-        root:CreateRadio(o[2], function() return self.value == o[1] end, function() self:SetValue(o[1]) end)
-      end
-    end)
+    toggleOptions(self)
   end)
   return b
 end
@@ -138,6 +212,7 @@ end
 -------------------------------------------------------------------------------------------
 
 local WHEEL_STEP = 40   -- pixels
+local BAR_W, BAR_MIN = 4, 24
 
 function UI.ScrollArea(parent)
   local s = CreateFrame("ScrollFrame", nil, parent)
@@ -151,6 +226,49 @@ function UI.ScrollArea(parent)
     self:SetVerticalScroll(v)
   end)
   s:SetScript("OnSizeChanged", function(self, w) self.content:SetWidth(w or self:GetWidth() or 1) end)
+
+  -- a thumb over its right edge while there's more than fits (1.33)
+  local thumb = CreateFrame("Frame", nil, s)
+  s.thumb = thumb
+  thumb:SetWidth(BAR_W + 4)                   -- a little wider than it looks, to catch the mouse
+  thumb:EnableMouse(true)
+  thumb:Hide()
+  thumb.inner = CreateFrame("Frame", nil, thumb)
+  thumb.inner:SetPoint("TOP")
+  thumb.inner:SetPoint("BOTTOM")
+  thumb.inner:SetWidth(BAR_W)
+  thumb.pill = UI.VPill(thumb.inner, BAR_W, "OVERLAY")
+  function thumb:Paint() self.pill:SetColor(self.hover and self.accent or UI.Mix(C.lineStrong, self.accent, .25), 1) end
+  thumb.ApplyAccent = UI.ApplyAccent
+  UI.AttachAccent(thumb)
+  UI.RepaintOnHover(thumb)
+  local function place()
+    local view, all = s:GetHeight() or 0, s.content:GetHeight() or 0
+    local range = all - view
+    thumb:SetShown(range > 1 and view > BAR_MIN)
+    if not thumb:IsShown() then return end
+    local h = math.max(BAR_MIN, view * view / all)
+    thumb.travel, thumb.range = view - h, range
+    thumb:SetHeight(h)
+    thumb:SetPoint("TOPRIGHT", s, "TOPRIGHT", 1, -(view - h) * math.min(1, (s:GetVerticalScroll() or 0) / range))
+  end
+  s:HookScript("OnVerticalScroll", place)
+  s:HookScript("OnScrollRangeChanged", place)
+  s:HookScript("OnSizeChanged", place)
+  s:HookScript("OnShow", place)
+  thumb:SetScript("OnMouseDown", function(self)
+    local _, y = GetCursorPosition()
+    self.y, self.from = y / self:GetEffectiveScale(), s:GetVerticalScroll() or 0
+    self:SetScript("OnUpdate", function(t)
+      local _, cy = GetCursorPosition()
+      if (t.travel or 0) <= 0 then return end
+      local v = t.from + (t.y - cy / t:GetEffectiveScale()) / t.travel * t.range
+      s:SetVerticalScroll(math.max(0, math.min(t.range, v)))
+    end)
+  end)
+  local function release(self) self:SetScript("OnUpdate", nil) end
+  thumb:SetScript("OnMouseUp", release)
+  thumb:SetScript("OnHide", release)
   return s
 end
 
@@ -207,6 +325,13 @@ function UI.SettingsList(parent)
       end
       UI.AttachAccent(h)
     end
+    -- and a line under it, fading away
+    local rule = UI.Tex(self.content, "ARTWORK", 0)
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", h, "BOTTOMLEFT", 0, -4)
+    rule:SetPoint("TOPRIGHT", h, "BOTTOMRIGHT", 0, -4)
+    rule.ApplyAccent = function(t, c) UI.GradientH(t, c, .4) end
+    if UI.WindowOf(self.content) then UI.AttachAccent(rule) else UI.GradientH(rule, C.goldSoft, .4) end
     place(h, 18, 6)
     return h
   end
