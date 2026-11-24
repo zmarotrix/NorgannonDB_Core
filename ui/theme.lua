@@ -25,7 +25,8 @@ UI.TEX = {
   pillFill = MEDIA .. "ui\\pill-fill", pillFace = MEDIA .. "ui\\pill-face", pillWell = MEDIA .. "ui\\pill-well",
   pillLine = MEDIA .. "ui\\pill-line", well = MEDIA .. "ui\\well", disc16 = MEDIA .. "ui\\disc16", disc8 = MEDIA .. "ui\\disc8",
   tabGlow = MEDIA .. "ui\\tab-glow", tabLine = MEDIA .. "ui\\tab-line",
-  sheen = MEDIA .. "ui\\sheen", shadow = MEDIA .. "ui\\shadow", star = MEDIA .. "ui\\star",
+  sheen = MEDIA .. "ui\\sheen", shadow = MEDIA .. "ui\\shadow", shadowRing = MEDIA .. "ui\\shadow-ring",
+  star = MEDIA .. "ui\\star",
   sword = MEDIA .. "ui\\sword", bag = MEDIA .. "ui\\bag",
 }
 

@@ -2,6 +2,18 @@
 
 Earlier versions are in the git history.
 
+## 1.35.1 (2026-11-23)
+
+- The shadow of see-through panels meets their edge more closely, with half the light line that could show between them over bright ground.
+
+## 1.35.0 (2026-11-23)
+
+- For add-ons: `UI.ShadowRing`, the window shadow for a panel you can see through. It's drawn only outside the panel, so it doesn't darken what's behind it.
+
+## 1.34.0 (2026-11-23)
+
+- **Saved data that stays together.** The game stopped naming the realm on 20 November 2026, so add-ons that kept a character under its realm and name started a second copy. `Core.Character` keys a character by its GUID and a guild by the server number in it (`Key`, `Server`, `GuildKey`), and finds what was saved under the old keys (`Pairs`, `Mine`) so each add-on can put its copies back together.
+
 ## 1.33.0 (2026-11-23)
 
 - **Selectors** are a recessed pill with a raised key in the add-on's colour that slides to what you pick. The seam at the end of the selected part is gone.

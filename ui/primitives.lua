@@ -223,6 +223,16 @@ function UI.Shadow(frame, sub)
   return UI.Slice(frame, "BACKGROUND", sub, TEX.shadow, .4375, 56, 28)
 end
 
+---The same shadow, only where it falls outside a panel with round corners of 10 (1.35): for a panel you can see through,
+---since UI.Shadow's art is filled inside and would darken what's behind. Any size from 20 units. Fade it with
+---:SetColor({ 1, 1, 1 }, alpha).
+function UI.ShadowRing(frame, sub)
+  -- a corner slice holds the whole of the cut-out's curve, so nothing but the straight edge stretches
+  local ring = UI.Slice(frame, "BACKGROUND", sub, TEX.shadowRing, 38 / 128, 38, 28)
+  table.remove(ring.pieces):Hide()   -- the middle is empty
+  return ring
+end
+
 ---The light on a panel (radius 10): its top edge catches it, and it darkens towards the foot (1.32).
 function UI.Sheen(frame, layer, sub)
   return UI.Slice(frame, layer, sub, TEX.sheen, .375, 12)
