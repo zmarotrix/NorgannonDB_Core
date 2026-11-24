@@ -96,9 +96,10 @@ function UI.Window(opts)
 
   -- no border (1.31): a soft shadow, a rounded body tinted with the accent, and a wash of the accent at the top
   -- (suite.css .az-window)
-  UI.Shadow(f, -8, RADIUS)
+  UI.Shadow(f, -8)
   f.bg = UI.Round(f, "BACKGROUND", -4, RADIUS)
   f.wash = UI.Wash(f, "BACKGROUND", -3, RADIUS, math.min(150, (opts.height or 440) * .5))
+  f.sheen = UI.Sheen(f, "BACKGROUND", -2)
 
   -- header
   local header = CreateFrame("Frame", nil, f)

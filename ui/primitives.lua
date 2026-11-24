@@ -21,6 +21,17 @@ local function tex(parent, layer, sub, c)
 end
 UI.Tex = tex
 
+---Lets a texture with curves in it sit between pixels (1.32). The client snaps textures to whole pixels by default, which
+---squashes small circles and turns their edges into steps.
+local function smooth(t)
+  if t.SetSnapToPixelGrid then
+    t:SetSnapToPixelGrid(false)
+    t:SetTexelSnappingBias(0)
+  end
+  return t
+end
+UI.Smooth = smooth
+
 local function colorObject(c, alpha)
   return CreateColor(c[1], c[2], c[3], alpha or c[4] or 1)
 end
@@ -56,13 +67,13 @@ local function pill(frame, height, layer, sub, inset)
   inset = inset or 0
   local h = height - inset * 2
   local p = {}
-  p.left = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
-  p.left:SetTexture(TEX.circle)
+  p.left = smooth(frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0))
+  p.left:SetTexture(h <= 24 and TEX.dot or TEX.circle)
   p.left:SetTexCoord(0, .5, 0, 1)
   p.left:SetSize(h / 2, h)
   p.left:SetPoint("LEFT", inset, 0)
-  p.right = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
-  p.right:SetTexture(TEX.circle)
+  p.right = smooth(frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0))
+  p.right:SetTexture(h <= 24 and TEX.dot or TEX.circle)
   p.right:SetTexCoord(.5, 1, 0, 1)
   p.right:SetSize(h / 2, h)
   p.right:SetPoint("RIGHT", -inset, 0)
@@ -84,7 +95,7 @@ UI.Pill = pill
 -- corners stay round at any size. The game has no rounded borders of its own.
 -------------------------------------------------------------------------------------------
 
-local CORNER = .25   -- the texture's corner slice, as a share of its size
+local CORNER = .25   -- the rounded rectangle's corner slice, as a share of its size
 
 local function setPiecesColor(self, c, alpha)
   for _, piece in ipairs(self.pieces) do piece:SetVertexColor(c[1], c[2], c[3], alpha or c[4] or 1) end
@@ -94,18 +105,21 @@ end
 ---:SetColor(c, alpha). "line" draws the outline texture instead of the fill. outset (1.31) reaches that many pixels
 ---past the frame's edges (a shadow).
 function UI.Round(frame, layer, sub, radius, style, outset)
+  return UI.Slice(frame, layer, sub, style == "line" and TEX.roundLine or TEX.round, CORNER, radius or 6, outset)
+end
+
+---A nine-slice: file's corners (a share of it, 0 to .5) stay size units across while the rest stretches, reaching outset
+---units past the frame's edges (1.32). :SetColor(c, alpha), :SetShown(on), .pieces.
+function UI.Slice(frame, layer, sub, file, m, r, outset)
   local o = outset or 0
-  local file = style == "line" and TEX.roundLine or TEX.round
-  local r = radius or 6
   local p = {}
   local function piece(texLeft, texRight, texTop, texBottom)
-    local tx = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0)
+    local tx = smooth(frame:CreateTexture(nil, layer or "BACKGROUND", nil, sub or 0))
     tx:SetTexture(file)
     tx:SetTexCoord(texLeft, texRight, texTop, texBottom)
     p[#p + 1] = tx
     return tx
   end
-  local m = CORNER
   -- fixed-size corners; the edges and the centre stretch between them
   local tl, tr = piece(0, m, 0, m), piece(1 - m, 1, 0, m)
   local bl, br = piece(0, m, 1 - m, 1), piece(1 - m, 1, 1 - m, 1)
@@ -148,7 +162,7 @@ end
 function UI.Wash(frame, layer, sub, radius, height)
   local r = radius
   local function corner(left, right)
-    local t = frame:CreateTexture(nil, layer, nil, sub)
+    local t = smooth(frame:CreateTexture(nil, layer, nil, sub))
     t:SetTexture(TEX.round)
     t:SetTexCoord(left, right, 0, CORNER)
     t:SetSize(r, r)
@@ -173,11 +187,51 @@ function UI.Wash(frame, layer, sub, radius, height)
   return wash
 end
 
----A soft shadow around a rounded panel (1.31), on the frame itself.
-function UI.Shadow(frame, sub, radius)
-  for i, ring in ipairs({ { 8, .1 }, { 5, .16 }, { 2, .26 } }) do
-    UI.Round(frame, "BACKGROUND", sub + i - 1, radius + ring[1], nil, ring[1]):SetColor(C.black, ring[2])
+---A soft shadow around a rounded panel (1.31), on the frame itself, falling a little downwards.
+function UI.Shadow(frame, sub)
+  return UI.Slice(frame, "BACKGROUND", sub, TEX.shadow, .4375, 56, 28)
+end
+
+---The light on a panel (radius 10): its top edge catches it, and it darkens towards the foot (1.32).
+function UI.Sheen(frame, layer, sub)
+  return UI.Slice(frame, layer, sub, TEX.sheen, .375, 12)
+end
+
+local function art(frame, layer, sub, name)   -- a control's nine-slice: 4 to spare outside, radius 6
+  return UI.Slice(frame, layer, sub, TEX[name], .375, 12, 4)
+end
+
+---A recessed field, for text boxes and dropdowns (1.32). :Set(line colour, lit): lit adds a halo in that colour.
+function UI.Field(frame, layer, sub)
+  local box = { halo = art(frame, layer, sub or 0, "halo"), well = art(frame, layer, (sub or 0) + 1, "field"),
+    line = art(frame, layer, (sub or 0) + 2, "line") }
+  function box:Set(border, lit)
+    self.line:SetColor(border, 1)
+    self.halo:SetColor(border, .45)
+    self.halo:SetShown(lit and true or false)
   end
+  return box
+end
+
+---A raised button face: a drop shadow, a colour and the light on it (1.32). :Set(fill), :Press(down).
+function UI.Face(frame, layer, sub)
+  local box = { drop = art(frame, layer, sub or 0, "drop"), fill = art(frame, layer, (sub or 0) + 1, "fill"),
+    gloss = art(frame, layer, (sub or 0) + 2, "gloss") }
+  function box:Set(fill) self.fill:SetColor(fill, 1) end
+  function box:Press(down)
+    self.drop:SetShown(not down)
+    self.gloss:SetColor({ 1, 1, 1 }, down and .35 or 1)
+  end
+  return box
+end
+
+---A round knob, as on switches and sliders: 18 across in a 28 cell, shadow included (1.32).
+function UI.Knob(parent, scale)
+  local t = smooth(parent:CreateTexture(nil, "OVERLAY", nil, 2))
+  t:SetTexture(TEX.knob)
+  t:SetTexCoord(0, .875, 0, .875)
+  t:SetSize(28 * (scale or 1), 28 * (scale or 1))
+  return t
 end
 
 ---The left edge of a rounded box, `width` wide, following its curve (a colour stripe on a card).
@@ -203,7 +257,7 @@ end
 
 ---An icon texture from the Core's media, tinted.
 function UI.Icon(parent, name, size, c, layer)
-  local t = parent:CreateTexture(nil, layer or "ARTWORK")
+  local t = smooth(parent:CreateTexture(nil, layer or "ARTWORK"))
   t:SetTexture(TEX[name] or name)
   t:SetSize(size, size)
   if c then t:SetVertexColor(c[1], c[2], c[3], c[4] or 1) end
@@ -221,7 +275,7 @@ end
 
 ---A suite addon's mark (gold disc with its symbol).
 function UI.Mark(parent, key, size, layer)
-  local t = parent:CreateTexture(nil, layer or "ARTWORK")
+  local t = smooth(parent:CreateTexture(nil, layer or "ARTWORK"))
   t:SetTexture(UI.MarkPath(key))
   t:SetSize(size, size)
   return t

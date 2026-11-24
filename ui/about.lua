@@ -25,10 +25,11 @@ local function build()
   f:SetClampedToScreen(true)
   f:SetWidth(WIDTH)
   -- as the suite's windows: no border, a soft shadow and a wash of its colour
-  UI.Shadow(f, -8, 10)
+  UI.Shadow(f, -8)
   f.bg = UI.Round(f, "BACKGROUND", -4, 10)
   f.bg:SetColor(UI.Mix(C.stone, C.goldSoft, .05))
   UI.Wash(f, "BACKGROUND", -3, 10, 70):SetColor(C.goldSoft, .16)
+  UI.Sheen(f, "BACKGROUND", -2)
 
   f.mark = UI.Mark(f, "core", 36)
   f.mark:SetPoint("TOPLEFT", 14, -14)

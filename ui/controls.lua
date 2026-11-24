@@ -25,11 +25,13 @@ function UI.Slider(parent, min, max, step, onChange)
   f:EnableMouse(true)
   f:EnableMouseWheel(true)
   f.track = UI.Pill(f, 6, "BACKGROUND", 0)
-  f.track:SetColor(C.track)
+  f.track:SetColor({ .02, .016, .012 })
+  f.floor = UI.Pill(f, 6, "BACKGROUND", 1, 1)
+  f.floor:SetColor({ .085, .07, .054 })
   f.fill = UI.Tex(f, "ARTWORK", 0)
   f.fill:SetHeight(4)
   f.fill:SetPoint("LEFT", 2, 0)
-  f.knob = UI.Icon(f, "circle", KNOB, nil, "OVERLAY")
+  f.knob = UI.Knob(f, KNOB / 18)
   f.min, f.max, f.step, f.value = min, max, step or 1, min
 
   local function snap(v)
@@ -45,7 +47,7 @@ function UI.Slider(parent, min, max, step, onChange)
     self.knob:SetPoint("CENTER", self, "LEFT", KNOB / 2 + travel * share, 0)
     self.fill:SetWidth(math.max(.01, travel * share))   -- never exactly 0: the client reads that as "no width set"
     local a = self.accent or C.goldSoft
-    self.fill:SetColorTexture(a[1], a[2], a[3], 1)
+    UI.Gradient(self.fill, UI.Mix(a, C.black, .25), a)
     self.knob:SetVertexColor(self.hover and 1 or .92, self.hover and 1 or .9, self.hover and 1 or .86)
   end
   function f:ApplyAccent(c)
@@ -97,9 +99,9 @@ end
 function UI.Dropdown(parent, options, onChange)
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(160, 24)
-  b.box = UI.SoftBox(b, "BACKGROUND", 0, 5)
+  b.box = UI.Field(b, "BACKGROUND", 0)
   function b:Paint()
-    self.box:Set(self.hover and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
+    self.box:Set(self.hover and self.accent or UI.Mix(C.line, self.accent, .22), self.hover)
   end
   b.ApplyAccent = UI.ApplyAccent
   b.label = UI.Text(b, "body", 13, C.text)

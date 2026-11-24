@@ -32,7 +32,7 @@ function UI.Button(parent, text, style, onClick)
   local b = CreateFrame("Button", nil, parent)
   b:SetHeight(24)
   b.style = BUTTON_STYLES[style] and style or "primary"
-  b.box = UI.SoftBox(b, "BACKGROUND", 0, 5)
+  b.box = UI.Face(b, "BACKGROUND", 0)
   b.label = UI.Text(b, "title", 13)
   b.label:SetPoint("CENTER", 0, 0)
   b.label:SetJustifyH("CENTER")
@@ -40,7 +40,7 @@ function UI.Button(parent, text, style, onClick)
 
   function b:Paint()
     local fill, textColor = BUTTON_STYLES[self.style](self.accent, self.hover)
-    self.box:Set(nil, fill)
+    self.box:Set(self.down and UI.Mix(fill, C.black, .14) or fill)
     -- dark text on a light button reads cleaner without the drop shadow
     self.label:SetShadowColor(0, 0, 0, textColor[1] > .5 and .9 or 0)
     self.label:SetTextColor(textColor[1], textColor[2], textColor[3])
@@ -52,9 +52,17 @@ function UI.Button(parent, text, style, onClick)
   end
 
   repaintOnHover(b)
-  -- the label dips while the button is held
-  b:SetScript("OnMouseDown", function(self) self.label:SetPoint("CENTER", 1, -1) end)
-  b:SetScript("OnMouseUp", function(self) self.label:SetPoint("CENTER", 0, 0) end)
+  -- the button sinks while it's held
+  local function press(down)
+    return function(self)
+      self.down = down
+      self.label:SetPoint("CENTER", 0, down and -1 or 0)
+      self.box:Press(down)
+      self:Paint()
+    end
+  end
+  b:SetScript("OnMouseDown", press(true))
+  b:SetScript("OnMouseUp", press(false))
   if onClick then b:SetScript("OnClick", onClick) end
   b:SetLabel(text)
   attachAccent(b)
@@ -90,7 +98,7 @@ end
 function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   local f = CreateFrame("Frame", nil, parent)
   f:SetHeight(28)
-  f.box = UI.SoftBox(f, "BACKGROUND", 0, 5)
+  f.box = UI.Field(f, "BACKGROUND", 0)
   f.icon = UI.Icon(f, "search", 14, C.muted)
   f.icon:SetPoint("LEFT", 9, 0)
   f.icon:SetAlpha(.8)
@@ -133,7 +141,7 @@ function UI.Search(parent, placeholder, onChange, onSubmit, hint)
   end
 
   function f:Paint()
-    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
+    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), self.focused)
   end
   f.ApplyAccent = applyAccent
   function f:GetText() return edit:GetText() end
@@ -213,36 +221,75 @@ function UI.Chip(parent, text, dot, onToggle)
   return b
 end
 
----An on/off switch: UI.Toggle(parent, function(on) end). :SetOn(on, silent).
+local SLIDE = .14          -- seconds for a switch to cross
+local KNOB_OFF, KNOB_ON = 11, 29
+
+local function switchArt(b, name, sub)
+  local t = UI.Smooth(b:CreateTexture(nil, "ARTWORK", nil, sub))
+  t:SetTexture(TEX[name])
+  t:SetTexCoord(0, .75, 0, .9375)      -- a 48x30 cell: the 40x22 switch and 4 to spare for its glow
+  t:SetPoint("TOPLEFT", -4, 4)
+  t:SetSize(48, 30)
+  return t
+end
+
+---An on/off switch: UI.Toggle(parent, function(on) end). :SetOn(on, silent). The knob slides and the track fills with the
+---window's accent; silent (or out of sight) it is simply there.
 function UI.Toggle(parent, onChange)
   local b = CreateFrame("Button", nil, parent)
-  b:SetSize(34, 18)
-  b.border = pill(b, 18, "BACKGROUND", 0)
-  b.fill = pill(b, 18, "BACKGROUND", 1, 1)
-  b.knob = UI.Icon(b, "circle", 12, nil, "ARTWORK")
-  b.on = false
+  b:SetSize(40, 22)
+  b.glow = switchArt(b, "switchGlow", 0)
+  b.well = switchArt(b, "switchWell", 1)
+  b.fill = switchArt(b, "switchFill", 2)
+  b.knob = UI.Knob(b)
+  b.on, b.at = false, 0
+
+  -- at: 0 off, 1 on, between while it slides
   function b:Paint()
+    local at, a = self.at, self.accent
+    local x = KNOB_OFF + (KNOB_ON - KNOB_OFF) * at
     self.knob:ClearAllPoints()
-    if self.on then
-      self.border:SetColor(self.accent)
-      self.fill:SetColor(UI.Mix({ .106, .086, .063 }, self.accent, .82))
-      self.knob:SetPoint("LEFT", 19, 0)
-      local knob = UI.OnColor(self.accent)
-      self.knob:SetVertexColor(knob[1], knob[2], knob[3])
-    else
-      self.border:SetColor(C.lineStrong)
-      self.fill:SetColor(C.track)
-      self.knob:SetPoint("LEFT", 3, 0)
-      self.knob:SetVertexColor(.54, .49, .38)
-    end
+    self.knob:SetPoint("CENTER", self, "LEFT", x, 0)
+    local lit = math.min(1, .64 + .36 * at + (self.hover and .14 or 0))
+    self.knob:SetVertexColor(lit, lit * (.975 + .025 * at), lit * (.92 + .08 * at))
+    self.fill:SetVertexColor(a[1], a[2], a[3], at)
+    self.glow:SetVertexColor(a[1], a[2], a[3], .34 * at + (self.hover and .16 or 0))
   end
   b.ApplyAccent = applyAccent
+
+  local function slide(self, elapsed)
+    self.time = self.time + elapsed
+    local t = math.min(1, self.time / SLIDE)
+    local eased = 1 - (1 - t) ^ 3
+    self.at = self.from + ((self.on and 1 or 0) - self.from) * eased
+    if t >= 1 then self:SetScript("OnUpdate", nil) end
+    self:Paint()
+  end
   function b:SetOn(on, silent)
     self.on = on and true or false
-    self:Paint()
+    if silent or not self:IsVisible() then
+      self.at = self.on and 1 or 0
+      self:SetScript("OnUpdate", nil)
+      self:Paint()
+    else
+      self.from, self.time = self.at, 0
+      self:SetScript("OnUpdate", slide)
+    end
     if not silent and onChange then onChange(self.on) end
   end
-  b:SetScript("OnClick", function(self) self:SetOn(not self.on) end)
+  b:SetScript("OnHide", function(self)
+    self:SetScript("OnUpdate", nil)
+    self.at = self.on and 1 or 0
+    self:Paint()
+  end)
+  b:SetScript("OnClick", function(self)
+    local kit = rawget(_G, "SOUNDKIT")
+    if kit and PlaySound then
+      pcall(PlaySound, self.on and kit.IG_MAINMENU_OPTION_CHECKBOX_OFF or kit.IG_MAINMENU_OPTION_CHECKBOX_ON)
+    end
+    self:SetOn(not self.on)
+  end)
+  repaintOnHover(b)
   attachAccent(b)
   return b
 end
@@ -335,8 +382,8 @@ end
 local function addSegmentHighlight(b, inner, first, last)
   b.hl = {}
   local function cap(texLeft, texRight)
-    local t = b:CreateTexture(nil, "ARTWORK")
-    t:SetTexture(TEX.circle)
+    local t = UI.Smooth(b:CreateTexture(nil, "ARTWORK"))
+    t:SetTexture(TEX.dot)
     t:SetTexCoord(texLeft, texRight, 0, 1)
     t:SetSize(inner / 2, inner)
     b.hl[#b.hl + 1] = t

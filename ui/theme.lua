@@ -17,7 +17,12 @@ UI.TEX = {
   arrow = MEDIA .. "ui\\arrow", exclaim = MEDIA .. "ui\\exclaim", question = MEDIA .. "ui\\question",
   round = MEDIA .. "ui\\round", roundLine = MEDIA .. "ui\\round-line",
   viewDetailed = MEDIA .. "ui\\view-detailed", viewCompact = MEDIA .. "ui\\view-compact",
-  gear = MEDIA .. "ui\\gear", star = MEDIA .. "ui\\star",
+  gear = MEDIA .. "ui\\gear",
+  -- the controls' art (tools/brand/build_controls.py), each twice its size on screen
+  switchWell = MEDIA .. "ui\\switch-well", switchFill = MEDIA .. "ui\\switch-fill", switchGlow = MEDIA .. "ui\\switch-glow",
+  knob = MEDIA .. "ui\\knob", dot = MEDIA .. "ui\\dot", field = MEDIA .. "ui\\field", line = MEDIA .. "ui\\line",
+  halo = MEDIA .. "ui\\halo", fill = MEDIA .. "ui\\fill", drop = MEDIA .. "ui\\drop", gloss = MEDIA .. "ui\\gloss",
+  sheen = MEDIA .. "ui\\sheen", shadow = MEDIA .. "ui\\shadow", star = MEDIA .. "ui\\star",
   sword = MEDIA .. "ui\\sword", bag = MEDIA .. "ui\\bag",
 }
 

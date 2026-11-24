@@ -124,9 +124,9 @@ end
 function UI.Input(parent, opts)
   opts = opts or {}
   local holder = CreateFrame("Frame", nil, parent)
-  holder.box = UI.SoftBox(holder, "BACKGROUND", 0, 5)
+  holder.box = UI.Field(holder, "BACKGROUND", 0)
   function holder:Paint()
-    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), C.inset)
+    self.box:Set(self.focused and self.accent or UI.Mix(C.line, self.accent, .22), self.focused)
   end
   holder.ApplyAccent = UI.ApplyAccent
   UI.AttachAccent(holder)

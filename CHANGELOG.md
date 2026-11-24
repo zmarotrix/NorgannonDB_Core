@@ -2,6 +2,13 @@
 
 Earlier versions are in the git history.
 
+## 1.32.0 (2026-11-23)
+
+- **Controls with some depth.** Switches have a recessed track that fills with the add-on's colour, a lit knob that slides across, a soft glow and the game's checkbox click. Text boxes and dropdowns are recessed and glow when you use them, buttons are raised and sink when pressed, and sliders share the switch's knob.
+- **Smooth edges.** Round shapes no longer have stepped edges: they use art drawn for their size, and the client no longer snaps them to whole pixels.
+- Windows have a softer, deeper shadow, light along the top edge, and darken slightly towards the bottom.
+- For add-ons: `UI.Field`, `UI.Face`, `UI.Knob`, `UI.Sheen`, `UI.Slice`, `UI.Smooth`.
+
 ## 1.31.0 (2026-11-23)
 
 - **A cleaner window.** The gold frame and the two round studs are gone. Every window is now a rounded panel with a soft shadow and no border.
